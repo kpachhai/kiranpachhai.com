@@ -7,10 +7,10 @@
       "url": "https://github.com/elastos/Elastos.Hive.Node"
     },
     {
-      "cover": "/portfolio/assist-service.png",
-      "title": "Blockchain Assist Service",
-      "description": "Node JS, Typescript, REST API",
-      "url": "https://github.com/tuum-tech/assist-service"
+      "cover": "/portfolio/profile.png",
+      "title": "Profile",
+      "description": "React, Web3, DIDs, NFTs, Personal Vault",
+      "url": "https://www.profile.site"
     },
     {
       "cover": "/portfolio/mtrl-token.png",
@@ -19,10 +19,28 @@
       "url": "https://www.material.network"
     },
     {
-      "cover": "/portfolio/profile.png",
-      "title": "Profile",
-      "description": "React, Web3, DIDs, NFTs, Personal Vault",
-      "url": "https://www.profile.site"
+      "cover": "/portfolio/assist-service.png",
+      "title": "Blockchain Assist Service",
+      "description": "Node JS, Typescript, REST API",
+      "url": "https://github.com/tuum-tech/assist-service"
+    },
+    {
+      "cover": "/portfolio/golang-api.png",
+      "title": "Blockchain API",
+      "description": "Golang, Docker, MySQL, Blockchain API",
+      "url": "https://gitlab.com/noderators/api.noderators.org"
+    },
+    {
+      "cover": "/portfolio/golang-cli-tool.png",
+      "title": "Blockchain CLI tool",
+      "description": "Golang, Docker, Blockchain Private Net",
+      "url": "https://github.com/cyber-republic/develap"
+    },
+    {
+      "cover": "/portfolio/django-project.png",
+      "title": "Blockchain Web Dashboard",
+      "description": "Django, Python, Javascript, Postgres",
+      "url": "https://github.com/cyber-republic/elastos-nucleus"
     }
   ]
 }
