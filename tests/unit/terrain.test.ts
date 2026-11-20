@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { model } from '../../src/model'
 import { buildIslandData } from '../../src/island/data'
+import { sourceLabel } from '../../src/lib/provenance'
+import { upstream } from '../../src/lib/site'
 import { methodsOf } from '../../src/island/lenses/shared'
 import { PEAK, elevation, summitsOf, trails } from '../../src/island/lenses/terrain'
 import * as terrain from '../../src/island/lenses/terrain'
 
-const data = buildIslandData(model)
+const data = buildIslandData(model, (source) => sourceLabel(source), upstream)
 
 describe('terrain relief', () => {
   for (const width of [390, 1280]) {

@@ -1,7 +1,9 @@
 ---
-import { model, type Upstream } from '../../model'
-import { github } from '../../lib/site'
+import { model } from '../../model'
+import { github, upstreamIn } from '../../lib/site'
 import { STATUS_LABELS } from '../../model/labels'
+import { countSearchUrl } from '../../../scripts/data/fetch-github'
+import SourceTag from '../SourceTag.astro'
 
 const COUNTS: [keyof typeof github.counts, string][] = [
   ['prsAuthored', 'pull requests authored'],
@@ -10,21 +12,9 @@ const COUNTS: [keyof typeof github.counts, string][] = [
   ['commented', 'threads commented on'],
 ]
 
-// One row per contribution; a repo with several statuses under one label shows several chips.
-type Row = { label: string; href: string; statuses: Upstream['status'][] }
-function rowsFor(entries: Upstream[]): Row[] {
-  const rows: Row[] = []
-  for (const entry of entries) {
-    const existing = rows.find((row) => row.label === entry.label && row.href === entry.href)
-    if (existing) existing.statuses.push(entry.status)
-    else rows.push({ label: entry.label, href: entry.href, statuses: [entry.status] })
-  }
-  return rows
-}
-
-const groups = model.domains
-  .map((domain) => ({ domain, rows: rowsFor(github.ledger.filter((entry) => entry.domainId === domain.id)) }))
-  .filter((group) => group.rows.length > 0)
+// One row per repo; a repo with several statuses shows several chips. The rows are the same ones
+// the drawer and the no-JS hero list read (src/lib/upstream.ts).
+const groups = model.domains.map((domain) => ({ domain, rows: upstreamIn(domain.id) })).filter((group) => group.rows.length > 0)
 ---
 
 <section class="sec wrap" id="upstream" aria-labelledby="up-h">
@@ -35,9 +25,12 @@ const groups = model.domains
   <dl class="totals">
     {
       COUNTS.map(([key, label]) => (
-        <div data-count={key}>
+        <div data-count={key} data-claim-id={`upstream-count-${key}`}>
           <dt>{label}</dt>
-          <dd>{github.counts[key]}</dd>
+          <dd>
+            {github.counts[key]}
+            <SourceTag source={{ kind: 'url', url: countSearchUrl(key) }} />
+          </dd>
         </div>
       ))
     }
@@ -77,7 +70,12 @@ const groups = model.domains
   .totals div:first-child { border-left: 0; }
   .totals dd { margin: 0; font-family: var(--display); font-stretch: 82%; font-size: 1.9rem; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; }
   .totals dt { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; }
-  .ledger { width: 100%; border-collapse: collapse; font-size: 0.97rem; }
+  /* Fixed layout: the status column keeps a width that holds the longest chip, and a long label
+     wraps inside the first column instead of widening the page (390 px at 200% text). */
+  .ledger { width: 100%; border-collapse: collapse; font-size: 0.97rem; table-layout: fixed; }
+  .ledger thead th:last-child { width: 6rem; }
+  /* Only a word too long for the column (11 letters or more) is hyphenated; shorter ones move whole. */
+  .ledger td, .grp th { overflow-wrap: break-word; hyphens: auto; hyphenate-limit-chars: 11 5 5; }
   .ledger thead th { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--ink); }
   .ledger td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
   .grp th { text-align: left; font-family: var(--display); font-stretch: 82%; font-weight: 700; font-size: 1.125rem; padding: 18px 0 6px; border-bottom: 1px solid var(--ink); }

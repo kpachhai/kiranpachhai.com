@@ -20,7 +20,6 @@ import {
   lineCount,
   methodsOf,
   present,
-  rootRem,
   scaleOf,
   svgEl,
   svgText,
@@ -117,13 +116,12 @@ export function height(width: number, m: LensModel, opts?: LayoutOptions): numbe
   return geometry(width, m, opts).height
 }
 
-function dimension(group: SVGGElement, x1: number, x2: number, y: number, label: string, at: number): Animation[] {
+function dimension(group: SVGGElement, x1: number, x2: number, y: number, label: string, at: number, rem: number): Animation[] {
   const mid = (x1 + x2) / 2
   const ticks = svgEl('path', { d: `M${x1} ${y - 9}V${y + 9}M${x2} ${y - 9}V${y + 9}`, class: 'ln-thin' }, group)
   const line = svgEl('path', { d: `M${x1} ${y}H${x2}`, class: 'ln-thin' }, group)
   const arrows = svgEl('path', { d: `M${x1} ${y}l8 -3.5v7z M${x2} ${y}l-8 -3.5v7z`, class: 'dotf' }, group)
   const tag = svgEl('g', {}, group)
-  const rem = rootRem() / 16
   const gap = svgEl('rect', { x: mid, y: y - 9 * rem, width: 0, height: 18 * rem, class: 'gap-bg' }, tag)
   const text = fitText(svgText(tag, mid, y + 3.5 * rem, label, 'svg-lab'), x2 - x1 - 40)
   const labelW = Math.min(text.getComputedTextLength(), x2 - x1 - 40) + 20
@@ -216,11 +214,11 @@ function callouts(group: SVGGElement, layouts: NodeLayout[], geo: PlanGeometry, 
   return animations.filter(present)
 }
 
-export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel): Animation[] {
+export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel, opts?: LayoutOptions): Animation[] {
   const width = Number(svg.getAttribute('width'))
   const stageH = Number(svg.getAttribute('height'))
-  const geo = geometry(width, m, { rem: rootRem() })
-  const rem = rootRem() / 16
+  const geo = geometry(width, m, opts)
+  const rem = scaleOf(opts)
   const group = decoGroup(svg, 'plan')
   const animations: (Animation | null)[] = []
 
@@ -244,7 +242,7 @@ export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel
       animations.push(drawIn(svgEl('path', { d: `M${hubX} ${bus}V${end}`, class: 'ln' }, wires), 600, 200))
       for (const x of [...row.map(centre), hubX]) animations.push(fadeIn(svgEl('circle', { cx: x, cy: bus, r: 3, class: 'dotf' }, wires), 750))
     }
-    animations.push(...dimension(phase(group, 'dim'), geo.pad, geo.drawW - geo.pad, geo.dimY, `${m.domains.length} AREAS OF WORK / ${m.proofs.length} PROOF ITEMS`, 500))
+    animations.push(...dimension(phase(group, 'dim'), geo.pad, geo.drawW - geo.pad, geo.dimY, `${m.domains.length} AREAS OF WORK / ${m.proofs.length} PROOF ITEMS`, 500, rem))
   } else {
     const trunkX = layouts[0].x + layouts[0].w + (layouts[1].x - layouts[0].x - layouts[0].w) / 2
     const last = layouts[layouts.length - 1]
@@ -255,7 +253,7 @@ export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel
       animations.push(drawIn(svgEl('path', { d: `M${left.x + left.w} ${y}H${layouts[row + 1].x}`, class: 'ln' }, wires), 450 + row * 40, 200))
       animations.push(fadeIn(svgEl('circle', { cx: trunkX, cy: y, r: 3, class: 'dotf' }, wires), 600 + row * 40))
     }
-    animations.push(...dimension(phase(group, 'dim'), geo.pad, width - geo.pad, geo.dimY, `${m.domains.length} AREAS / ${m.proofs.length} PROOF ITEMS`, 600))
+    animations.push(...dimension(phase(group, 'dim'), geo.pad, width - geo.pad, geo.dimY, `${m.domains.length} AREAS / ${m.proofs.length} PROOF ITEMS`, 600, rem))
   }
 
   const hub = phase(group, 'hub')
@@ -263,7 +261,7 @@ export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel
   const room = geo.hub.w - 20
   fitText(svgText(hub, hubX, geo.hub.y + 25 * rem, 'CAPABILITY MAP', 'svg-hub'), room)
   hubParts(hub, geo, m, rem)
-  fitText(svgText(hub, hubX, geo.hub.y + 88 * rem, `${languageCount(m)} LANGUAGES / ${m.methods.length} METHODS / ${m.proofs.length} PROOFS`, 'svg-mut'), room)
+  fitText(svgText(hub, hubX, geo.hub.y + 88 * rem, `${languageCount(m)} PRIMARY LANGUAGES / ${m.methods.length} METHODS / ${m.proofs.length} PROOFS`, 'svg-mut'), room)
   animations.push(fadeIn(hub, 200, 500))
 
   animations.push(...callouts(phase(group, 'callout'), layouts, geo, m, rem))

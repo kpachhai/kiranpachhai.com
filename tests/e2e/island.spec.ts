@@ -1,9 +1,22 @@
 import { expect, test, type Page } from '@playwright/test'
 import { model } from '../../src/model'
+import { upstreamIn } from '../../src/lib/site'
 
 const teachProofIds = new Set(model.range.filter((cell) => cell.mode === 'teach').flatMap((cell) => cell.proofIds))
 const teachLabels = model.proofs.filter((proof) => teachProofIds.has(proof.id)).map((proof) => proof.label)
 const firstDomain = model.domains[0]
+
+// The intro and the role cycle are not under test here; skip them so the page settles at once.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      window.sessionStorage.setItem('kp-intro-seen', '1')
+      window.sessionStorage.setItem('kp-roles-seen', '1')
+    } catch {
+      // Storage blocked: the intro plays, which these tests tolerate.
+    }
+  })
+})
 
 async function ready(page: Page, path = '/') {
   await page.goto(path)
@@ -45,6 +58,16 @@ test.describe('theme', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-island', 'ready')
     const ground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
     expect(ground).toBe('rgb(15, 17, 18)')
+  })
+
+  test('when the island code cannot load, the page shows its no-JS view with no dead controls', async ({ page }) => {
+    await page.route('**/_astro/*.js', (route) => route.abort())
+    await page.goto('/')
+    await expect(page.locator('html')).not.toHaveClass(/\bjs\b/)
+    await expect(page.locator('header.bar')).toBeHidden()
+    await expect(page.locator('footer [data-theme-control]')).toBeHidden()
+    await expect(page.locator('#stage [data-domain]').first()).toBeVisible()
+    await expect(page.locator('#stage .proofs').first()).toBeVisible()
   })
 
   test('the theme control cycles system, light, dark', async ({ page }) => {
@@ -149,6 +172,42 @@ test.describe('lens state', () => {
     await expect(page.locator('#palette [aria-selected="true"]')).toContainText('Keyboard shortcuts: off')
   })
 
+  test('the home page has one theme control and one switch, both named as everywhere else', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await ready(page)
+    const visible = (selector: string) =>
+      page.locator(selector).evaluateAll((items) => items.filter((item) => item.checkVisibility()).map((item) => item.textContent?.trim()))
+    expect(await visible('[data-theme-control]')).toEqual(['Theme: system'])
+    expect(await visible('[data-shortcuts-control]')).toEqual(['Keyboard shortcuts'])
+  })
+
+  test('the bar switch turns keys 1 to 5 off and on, and the palette entry follows', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await ready(page)
+    const bar = page.locator('#shortcuts-toggle')
+    await expect(bar).toBeVisible()
+    await expect(bar).toHaveText('Keyboard shortcuts')
+    await expect(bar).toHaveAttribute('aria-pressed', 'true')
+    await bar.click()
+    await expect(bar).toHaveAttribute('aria-pressed', 'false')
+    await page.locator('body').click({ position: { x: 5, y: 400 } })
+    await page.keyboard.press('3')
+    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'plan')
+    await openPalette(page)
+    await page.locator('#palette input').fill('keyboard shortcuts')
+    await expect(page.locator('#palette [aria-selected="true"]')).toContainText('Keyboard shortcuts: off')
+    await page.keyboard.press('Enter')
+    await expect(bar).toHaveAttribute('aria-pressed', 'true')
+    await page.keyboard.press('3')
+    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'console')
+  })
+
+  test('a digit key on a layout that types another character still switches the lens', async ({ page }) => {
+    await ready(page)
+    await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '"', code: 'Digit3', bubbles: true })))
+    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'console')
+  })
+
   test('number keys are ignored while typing in the palette', async ({ page }) => {
     await ready(page)
     await openPalette(page)
@@ -159,6 +218,24 @@ test.describe('lens state', () => {
 })
 
 test.describe('palette', () => {
+  test('Ctrl+Shift+K leaves the palette closed; Ctrl with the K key on a non-Latin layout opens it', async ({ page }) => {
+    await ready(page)
+    await page.keyboard.press('ControlOrMeta+Shift+k')
+    await expect(page.locator('#palette')).toBeHidden()
+    await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '\u043b', code: 'KeyK', ctrlKey: true, bubbles: true })))
+    await expect(page.locator('#palette')).toBeVisible()
+  })
+
+  test('a press on the palette footer keeps focus in the input, so Esc still closes it', async ({ page }) => {
+    await ready(page)
+    await openPalette(page)
+    await expect(page.locator('#palette input')).toHaveAttribute('placeholder', 'Search domains, proofs, methods, materials, lenses')
+    await page.locator('#palette .pal-foot').click()
+    await expect(page.locator('#palette input')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('#palette')).toBeHidden()
+  })
+
   test('the visible button shows a plain-text shortcut hint', async ({ page }) => {
     await ready(page)
     const hint = page.locator('#palette-open .hint')
@@ -238,6 +315,141 @@ test.describe('palette', () => {
   })
 })
 
+test.describe('fonts', () => {
+  test('the thesis uses the real italic face, it never shifts as fonts arrive, and page CLS stays under 0.02', async ({ page }) => {
+    await page.addInitScript(() => {
+      const record = { thesis: [] as number[], total: 0 }
+      ;(window as unknown as { __shifts: typeof record }).__shifts = record
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean; sources?: { node?: Node | null }[] })[]) {
+          if (entry.hadRecentInput) continue
+          record.total += entry.value
+          const moved = (entry.sources ?? []).some((source) => {
+            const node = source.node instanceof Element ? source.node : source.node?.parentElement
+            return Boolean(node?.closest('.thesis'))
+          })
+          if (moved) record.thesis.push(entry.value)
+        }
+      }).observe({ type: 'layout-shift', buffered: true })
+    })
+    await ready(page)
+    await page.evaluate(() => document.fonts.ready)
+    const italic = await page.evaluate(() => [...document.fonts].some((face) => face.family.replace(/"/g, '') === 'Newsreader' && face.style === 'italic' && face.status === 'loaded'))
+    expect(italic).toBe(true)
+    expect(await page.locator('.thesis').evaluate((thesis) => getComputedStyle(thesis).fontStyle)).toBe('italic')
+    // The headline face is the condensed cut.
+    expect(await page.evaluate(() => [...document.fonts].some((face) => face.family.replace(/"/g, '') === 'Bricolage Grotesque' && face.stretch === '82%' && face.status === 'loaded'))).toBe(true)
+    await page.waitForTimeout(300)
+    const shifts = await page.evaluate(() => (window as unknown as { __shifts: { thesis: number[]; total: number } }).__shifts)
+    expect(shifts.thesis).toEqual([])
+    expect(shifts.total).toBeLessThan(0.02)
+  })
+})
+
+test.describe('settings on every page', { tag: '@smoke' }, () => {
+  for (const path of ['/work/schedule-service/', '/404.html']) {
+    test(`${path} has the theme control and the shortcuts switch`, async ({ page }) => {
+      await page.goto(path)
+      const theme = page.locator('footer [data-theme-control]')
+      const keys = page.locator('footer [data-shortcuts-control]')
+      await expect(theme).toHaveText('Theme: system')
+      await theme.click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+      await expect(theme).toHaveText('Theme: light')
+      await expect(keys).toHaveAttribute('aria-pressed', 'true')
+      await keys.click()
+      await expect(keys).toHaveAttribute('aria-pressed', 'false')
+      await page.reload()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+      await expect(page.locator('footer [data-shortcuts-control]')).toHaveAttribute('aria-pressed', 'false')
+    })
+  }
+
+  test('on a phone the footer keeps the theme control and leaves out the shortcuts switch', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/work/schedule-service/')
+    await expect(page.locator('footer [data-theme-control]')).toBeVisible()
+    await expect(page.locator('footer [data-shortcuts-control]')).toBeHidden()
+  })
+
+  test('the shortcuts switch set on a case page holds on the home page', async ({ page }) => {
+    await page.goto('/work/schedule-service/')
+    await page.locator('footer [data-shortcuts-control]').click()
+    await ready(page)
+    await page.locator('body').click({ position: { x: 5, y: 400 } })
+    await page.keyboard.press('3')
+    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'plan')
+  })
+})
+
+test.describe('palette method entries', () => {
+  for (const method of model.methods) {
+    test(`${method.id} ${method.name} scrolls to its own place in How I work`, async ({ page }) => {
+      await ready(page)
+      await openPalette(page)
+      await page.locator('#palette input').fill(`kp ${method.id.toLowerCase()}`)
+      const label = page.locator('.label', { hasText: new RegExp(`^kp ${method.id.toLowerCase()}$`) })
+      await page.locator('#palette [role="option"][data-kind="command"]').filter({ has: label }).click()
+      const target = page.locator(`#method-${method.id.toLowerCase()}`)
+      await expect(target).toBeFocused()
+      await expect(target).toContainText(method.name)
+      await expect(target).toBeInViewport()
+    })
+
+    test(`the method entry "${method.id} ${method.name}" scrolls to the same anchor`, async ({ page }) => {
+      await ready(page)
+      await openPalette(page)
+      await page.locator('#palette input').fill(method.name)
+      const label = page.locator('.label', { hasText: new RegExp(`^${method.id} ${method.name}$`) })
+      await page.locator('#palette [role="option"][data-kind="method"]').filter({ has: label }).click()
+      const target = page.locator(`#method-${method.id.toLowerCase()}`)
+      await expect(target).toBeFocused()
+      await expect(target).toBeInViewport()
+    })
+  }
+})
+
+test.describe('drawer on a touch phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  async function openByTap(page: Page) {
+    await ready(page)
+    const node = page.locator(`#stage [data-node="${firstDomain.id}"]`)
+    await node.scrollIntoViewIfNeeded()
+    await node.tap()
+    await expect(page.locator('#drawer')).toBeVisible()
+    return node
+  }
+
+  test('a touch scroll that starts outside the drawer leaves it open', async ({ page }) => {
+    await openByTap(page)
+    // Measure the sheet once it has slid in.
+    await page.waitForFunction(() => document.getElementById('drawer')!.getAnimations({ subtree: true }).length === 0)
+    await page.waitForTimeout(400)
+    const top = await page.locator('#drawer').evaluate((drawer) => drawer.getBoundingClientRect().top)
+    expect(top).toBeGreaterThan(170)
+    const before = await page.evaluate(() => window.scrollY)
+    // A finger lands above the bottom sheet and drags up: the page behind scrolls.
+    const client = await page.context().newCDPSession(page)
+    const startY = Math.round(top - 20)
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 195, y: startY }] })
+    for (let step = 1; step <= 10; step++) {
+      await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 195, y: startY - step * 15 }] })
+    }
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await page.waitForTimeout(300)
+    await expect(page.locator('#drawer')).toBeVisible()
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(before)
+  })
+
+  test('a tap outside the drawer closes it and returns focus to the node', async ({ page }) => {
+    const node = await openByTap(page)
+    await page.touchscreen.tap(195, 120)
+    await expect(page.locator('#drawer')).toBeHidden()
+    await expect(node).toBeFocused()
+  })
+})
+
 test.describe('drawer', () => {
   test('Enter on a domain node opens the drawer for that domain', async ({ page }) => {
     await ready(page)
@@ -248,11 +460,19 @@ test.describe('drawer', () => {
     for (const proof of model.proofs.filter((item) => item.domainId === firstDomain.id)) expect(drawerText).toContain(proof.label)
   })
 
-  test('lists the domain upstream items with their real hrefs', async ({ page }) => {
+  test('lists the domain upstream rows, their statuses and pinned links with real hrefs', async ({ page }) => {
     await ready(page)
     await openDrawerFromNode(page, firstDomain.id)
-    for (const item of firstDomain.upstream) {
-      await expect(page.locator(`#drawer a[href="${item.href}"]`).filter({ hasText: item.label })).toHaveCount(1)
+    const rows = upstreamIn(firstDomain.id)
+    expect(rows.length).toBeGreaterThan(0)
+    await expect(page.locator('#drawer .dr-up > li')).toHaveCount(rows.length)
+    for (const row of rows) {
+      await expect(page.locator(`#drawer a[href="${row.href}"]`).filter({ hasText: row.label })).toHaveCount(1)
+      const item = page.locator('#drawer .dr-up > li').filter({ has: page.locator(`a[href="${row.href}"]`) })
+      await expect(item.locator('.st-chip')).toHaveCount(row.statuses.length)
+      for (const link of row.links) {
+        await expect(page.locator(`#drawer a[href="${link.href}"]`).filter({ hasText: link.note })).toHaveCount(1)
+      }
     }
   })
 
@@ -309,6 +529,18 @@ test.describe('drawer', () => {
     await page.mouse.click(120, 700)
     await expect(page.locator('#drawer')).toBeHidden()
     await expect(node).toBeFocused()
+  })
+
+  test('the live region names lens switches by display name, stays quiet on load and on opening, and names a step', async ({ page }) => {
+    await ready(page)
+    const live = page.locator('#island-live')
+    await expect(live).toHaveText('')
+    await page.keyboard.press('3')
+    await expect(live).toHaveText('Lens: Console')
+    await openDrawerFromNode(page, firstDomain.id)
+    await expect(live).toHaveText('Lens: Console')
+    await page.locator('#drawer [data-step="next"]').click()
+    await expect(live).toHaveText(`Showing ${model.domains[1].name}`)
   })
 
   test('next and previous step through the domains', async ({ page }) => {

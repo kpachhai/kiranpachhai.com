@@ -1,0 +1,95 @@
+name: Deploy
+
+# Manual only: an owner push to main never deploys by itself.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    # A dispatch from any other branch must not build for, or reach, production.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Falls back to the committed snapshot when GitHub cannot be reached; it exits 0 either way.
+      - run: npm run data
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run build
+      - run: npm run gates
+      # The publish job ships exactly the bytes the gates measured, so it downloads this build
+      # instead of rebuilding.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+          # Hidden files (for example .well-known/) must reach gh-pages; rsync --delete would drop them.
+          include-hidden-files: true
+          retention-days: 1
+      - run: npm run test:e2e
+
+  publish:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+      - name: Assert the custom domain survives
+        run: test "$(cat dist/CNAME)" = "kiranpachhai.com"
+      - name: Fetch the publish branch
+        run: git fetch origin gh-pages
+      - name: Tag the previous site once, before the first redesign deploy
+        run: |
+          if git ls-remote --exit-code --tags origin refs/tags/pre-redesign-2026 > /dev/null; then
+            echo "pre-redesign-2026 already exists on origin; leaving it"
+          else
+            git tag pre-redesign-2026 origin/gh-pages
+            git push origin refs/tags/pre-redesign-2026
+          fi
+      - name: Publish dist to the gh-pages root
+        run: |
+          git worktree add --detach ../site origin/gh-pages
+          rsync -a --delete --exclude=.git dist/ ../site/
+          # GitHub Pages runs Jekyll on a branch deploy, which would drop the _astro directory.
+          touch ../site/.nojekyll
+          cd ../site
+          git add --all
+          # A partial publish must never go green: every built asset has to be in the index.
+          missing=$(comm -23 <(cd "$GITHUB_WORKSPACE/dist" && find _astro -type f | sort) <(git ls-files _astro | sort))
+          if [ -n "$missing" ]; then
+            echo "Assets missing from the gh-pages index:" >&2
+            echo "$missing" >&2
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "gh-pages already matches this build; nothing to publish"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Deploy ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages

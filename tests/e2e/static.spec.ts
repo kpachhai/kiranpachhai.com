@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { model } from '../../src/model'
+import { upstreamIn } from '../../src/lib/site'
 
 test.use({ javaScriptEnabled: false })
 
@@ -16,7 +17,7 @@ const REDIRECTS: [string, string][] = [
   ['/portfolio/', '/#work'],
   ['/contact/', '/'],
 ]
-const SECTIONS = ['work', 'methods', 'range', 'timeline', 'upstream', 'talks']
+const SECTIONS = ['work', 'methods', 'journey', 'range', 'timeline', 'upstream', 'talks']
 
 // Serve a redirect page without its meta refresh so the page itself can be inspected.
 async function holdRedirect(page: Page, path: string) {
@@ -27,7 +28,7 @@ async function holdRedirect(page: Page, path: string) {
   })
 }
 
-test.describe('home page without JavaScript', () => {
+test.describe('home page without JavaScript', { tag: '@smoke' }, () => {
   test('shows the six domains in the static hero', async ({ page }) => {
     await page.goto('/')
     const stage = page.locator('#stage')
@@ -47,6 +48,20 @@ test.describe('home page without JavaScript', () => {
   test('has every section anchor', async ({ page }) => {
     await page.goto('/')
     for (const id of SECTIONS) await expect(page.locator(`section#${id}`), id).toHaveCount(1)
+  })
+
+  test('lists every upstream row and pinned link under its area', async ({ page }) => {
+    await page.goto('/')
+    for (const domain of model.domains) {
+      const expected = upstreamIn(domain.id).flatMap((row) => [{ href: row.href, text: row.label }, ...row.links.map((link) => ({ href: link.href, text: link.note }))])
+      const links = page.locator(`#stage [data-domain="${domain.id}"] [data-upstream] a`)
+      await expect(links, domain.id).toHaveCount(expected.length)
+      for (const [position, item] of expected.entries()) {
+        await expect(links.nth(position)).toHaveAttribute('href', item.href)
+        await expect(links.nth(position)).toHaveText(item.text)
+        await expect(links.nth(position)).toBeVisible()
+      }
+    }
   })
 
   test('shows the upstream counts with their date', async ({ page }) => {
@@ -69,7 +84,7 @@ test.describe('home page without JavaScript', () => {
   })
 })
 
-test.describe('case-study pages', () => {
+test.describe('case-study pages', { tag: '@smoke' }, () => {
   for (const slug of SLUGS) {
     test(`${slug} has problem, approach, methods and outcome`, async ({ page }) => {
       const response = await page.goto(`/work/${slug}/`)
@@ -81,7 +96,7 @@ test.describe('case-study pages', () => {
   }
 })
 
-test.describe('old URLs', () => {
+test.describe('old URLs', { tag: '@smoke' }, () => {
   for (const [path, target] of REDIRECTS) {
     test(`${path} refreshes to ${target} and links to it`, async ({ page, request }) => {
       const html = await (await request.get(path)).text()
@@ -100,7 +115,7 @@ test.describe('old URLs', () => {
   })
 })
 
-test.describe('every page at 390 px', () => {
+test.describe('every page at 390 px', { tag: '@smoke' }, () => {
   test.use({ viewport: { width: 390, height: 844 } })
   const pages = ['/', ...SLUGS.map((slug) => `/work/${slug}/`), ...REDIRECTS.map(([path]) => path), '/404.html']
 
@@ -111,14 +126,25 @@ test.describe('every page at 390 px', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     })
 
-    test(`${path} footer links only to GitHub and LinkedIn`, async ({ page }) => {
+    test(`${path} has no horizontal scroll with the root font at 200%`, async ({ page }) => {
+      if (REDIRECTS.some(([redirect]) => redirect === path)) await holdRedirect(page, path)
+      await page.goto(path)
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = '200%'
+      })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+    })
+
+    test(`${path} footer links only to GitHub, LinkedIn, YouTube and X`, async ({ page }) => {
       if (REDIRECTS.some(([redirect]) => redirect === path)) await holdRedirect(page, path)
       await page.goto(path)
       const links = page.locator('footer a')
-      await expect(links).toHaveCount(2)
+      await expect(links).toHaveCount(4)
       expect(await links.evaluateAll((items) => items.map((item) => [item.textContent?.trim(), item.getAttribute('href')]))).toEqual([
         ['GitHub', 'https://github.com/kpachhai'],
         ['LinkedIn', 'https://www.linkedin.com/in/kiranpachhai'],
+        ['YouTube', 'https://www.youtube.com/channel/UCu1XxDJE84ZvgLJ-EssbveA'],
+        ['X', 'https://twitter.com/mr_pachhai'],
       ])
     })
   }

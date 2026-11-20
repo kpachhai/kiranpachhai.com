@@ -1,6 +1,7 @@
 ---
 import { model } from '../../model'
 import { domainName, methodName, proofById } from '../../lib/site'
+import SourceTag from '../SourceTag.astro'
 ---
 
 <section class="sec wrap" id="work" aria-labelledby="work-h">
@@ -11,10 +12,11 @@ import { domainName, methodName, proofById } from '../../lib/site'
       model.caseStudies.map((study) => {
         const lead = proofById(study.proofIds[0])
         return (
-          <li class="case">
+          <li class="case" data-claim-id={`case-${study.slug}-problem`}>
             <span class="dom">{domainName(lead.domainId)}</span>
             <h3><a href={`/work/${study.slug}/`}>{study.title}</a></h3>
             <p>{study.problem.text}</p>
+            <SourceTag source={study.problem.source} />
             {lead.methods.length > 0 && (
               <ul class="mth" aria-label="Methods">
                 {lead.methods.map((id) => (

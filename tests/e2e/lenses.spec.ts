@@ -6,6 +6,18 @@ type Lens = (typeof LENSES)[number]
 const KEY: Record<Lens, string> = { plan: '1', terrain: '2', console: '3', index: '4', range: '5' }
 const DRAWN: Lens[] = ['plan', 'console', 'index', 'range']
 
+// The intro and the role cycle are not under test here; skip them so the page settles at once.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      window.sessionStorage.setItem('kp-intro-seen', '1')
+      window.sessionStorage.setItem('kp-roles-seen', '1')
+    } catch {
+      // Storage blocked: the intro plays, which these tests tolerate.
+    }
+  })
+})
+
 async function ready(page: Page, path = '/') {
   await page.goto(path)
   await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
@@ -54,6 +66,58 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
 test.describe('larger text at 390 px', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
+  test('with the root font at 200% the bar keeps every label inside its control, with no overlap', async ({ page }) => {
+    await ready(page)
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%'
+    })
+    const report = await page.evaluate(() => {
+      const controls = [...document.querySelectorAll<HTMLElement>('header.bar button')].filter((control) => control.getClientRects().length > 0)
+      const squeezed = controls.filter((control) => control.scrollWidth > control.clientWidth + 1).map((control) => control.textContent?.trim())
+      const rects = controls.map((control) => ({ name: control.textContent?.trim(), rect: control.getBoundingClientRect() }))
+      const overlaps: string[] = []
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i].rect
+          const b = rects[j].rect
+          if (a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2) overlaps.push(`${rects[i].name} / ${rects[j].name}`)
+        }
+      }
+      return { squeezed, overlaps, count: controls.length, scroll: document.documentElement.scrollWidth }
+    })
+    expect(report.count).toBeGreaterThan(6)
+    expect(report.squeezed).toEqual([])
+    expect(report.overlaps).toEqual([])
+    expect(report.scroll).toBe(390)
+  })
+
+  // Words of up to ten letters fit the label column at 200%; longer ones may hyphenate.
+  test('with the root font at 200% no short word in an upstream label breaks', async ({ page }) => {
+    await ready(page)
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%'
+    })
+    const broken = await page.locator('#upstream .ledger td a').evaluateAll((links) =>
+      links.flatMap((link) => {
+        // A word split across lines shows up as one text node with more line boxes than its words allow.
+        const range = document.createRange()
+        const words = (link.textContent ?? '').split(/[\s-]+/).filter((word) => word.length > 0 && word.length <= 10)
+        const split: string[] = []
+        for (const word of words) {
+          const text = link.firstChild
+          if (!text) continue
+          const start = (link.textContent ?? '').indexOf(word)
+          range.setStart(text, start)
+          range.setEnd(text, start + word.length)
+          const tops = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)))
+          if (tops.size > 1) split.push(word)
+        }
+        return split
+      }),
+    )
+    expect(broken).toEqual([])
+  })
+
   test('with the root font at 200% no node label overflows and nodes do not overlap', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await ready(page)
@@ -79,8 +143,9 @@ test.describe('larger text at 390 px', () => {
           expect(hit, `${lens} ${a.id} / ${b.id}`).toBe(false)
         }
       }
-      // The stage's own content stays inside it. (Page-wide scrollWidth at 200% is not asserted here:
-      // a later section's ledger table is wider than 390 px at that size, outside this lens code.)
+      // No section of the page scrolls sideways at this size.
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), lens).toBe(390)
+      // The stage's own content stays inside it.
       const outside = await page.evaluate(() => {
         const box = document.querySelector('#stage .stage-box')!.getBoundingClientRect()
         // The proof lists are visually hidden on purpose (clipped to 1px), so they are skipped.
@@ -115,11 +180,12 @@ test.describe('reduced motion', () => {
   test('turning reduced motion on mid-morph finishes the morph at once', async ({ page }) => {
     await ready(page)
     await page.keyboard.press('3')
-    await page.waitForTimeout(350)
+    // Mid-morph: the fade is over and the node boxes are moving.
+    await page.waitForFunction(() => [...document.querySelectorAll('#stage .node-box')].some((box) => box.getAnimations().length > 0))
     expect(await scriptedAnimations(page)).toBeGreaterThan(0)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    const left = await page.evaluate(() => new Promise<number>((resolve) => setTimeout(() => resolve(document.getAnimations().length), 50)))
-    expect(left).toBe(0)
+    // The move just started, so at least 800 ms of it remain: ending within 400 ms means it was cut short.
+    await expect.poll(() => page.evaluate(() => document.getAnimations().length), { timeout: 400 }).toBe(0)
     await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'console')
     for (const rect of await nodeRects(page)) expect(Math.abs(rect.y - rect.top), rect.id).toBeLessThanOrEqual(1)
   })
@@ -128,14 +194,18 @@ test.describe('reduced motion', () => {
 test.describe('reduced motion inside the edge fade', () => {
   test('turning reduced motion on during the 180 ms fade stops the morph that follows', async ({ page }) => {
     await ready(page)
-    // Measure the fade from the page itself, so the toggle lands inside it rather than after it.
-    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true })))
-    expect(await page.evaluate(() => document.querySelector('#stage [data-deco]')!.getAnimations().length)).toBe(1)
-    await page.waitForTimeout(90)
+    // Start the switch and hold the edge fade in the same task, so the toggle lands inside the fade
+    // however slow the runner is. Reduced motion then has to finish the held fade and skip the morph.
+    const held = await page.evaluate(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true }))
+      const fades = document.querySelector('#stage [data-deco]')!.getAnimations()
+      for (const fade of fades) fade.pause()
+      return fades.length
+    })
+    expect(held).toBe(1)
     expect(await page.locator('#stage').getAttribute('data-lens'), 'still in the fade').toBe('plan')
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    const left = await page.evaluate(() => new Promise<number>((resolve) => setTimeout(() => resolve(document.getAnimations().length), 50)))
-    expect(left).toBe(0)
+    await expect.poll(() => page.evaluate(() => document.getAnimations().length)).toBe(0)
     await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'console')
     // Nothing starts late either: still zero a full morph later.
     await page.waitForTimeout(1200)
@@ -149,6 +219,71 @@ test.describe('reduced motion inside the edge fade', () => {
 
 test.describe('morph', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('leaving during the draw-in holds each half-drawn line where it is while it fades', async ({ page }) => {
+    await ready(page)
+    await page.keyboard.press('3')
+    // Wait until some console connector is part-way through its draw-in.
+    await page.waitForFunction(
+      () =>
+        [...document.querySelectorAll('#stage [data-deco] path, #stage [data-deco] line, #stage [data-deco] polyline')].some((line) =>
+          line.getAnimations().some((animation) => {
+            const progress = animation.effect?.getComputedTiming().progress
+            return animation.playState === 'running' && progress !== null && progress !== undefined && progress > 0.15 && progress < 0.85
+          }),
+        ),
+      undefined,
+      { polling: 'raf', timeout: 5000 },
+    )
+    // A cancelled draw-in would jump to the full stroke (offset 0) for the fade; a held one keeps its
+    // offset. Pausing settles within a frame, so the offset is compared between later frames.
+    const offsets = await page.evaluate(
+      () =>
+        new Promise<{ held: number; later: number }[]>((resolve) => {
+          const lines = [...document.querySelectorAll<SVGGeometryElement>('#stage [data-deco] path, #stage [data-deco] line, #stage [data-deco] polyline')].filter((line) =>
+            line.getAnimations().some((animation) => {
+              const progress = animation.effect?.getComputedTiming().progress
+              return animation.playState === 'running' && progress !== null && progress !== undefined && progress > 0.05 && progress < 0.85
+            }),
+          )
+          const read = () => lines.map((line) => parseFloat(getComputedStyle(line).strokeDashoffset))
+          const frames = (count: number, then: () => void) => (count === 0 ? then() : requestAnimationFrame(() => frames(count - 1, then)))
+          document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '4', code: 'Digit4', bubbles: true }))
+          frames(2, () => {
+            const held = read()
+            frames(4, () => resolve(read().map((later, k) => ({ held: held[k], later }))))
+          })
+        }),
+    )
+    expect(offsets.length).toBeGreaterThan(0)
+    for (const { held, later } of offsets) {
+      expect(held).toBeGreaterThan(1)
+      expect(Math.abs(later - held)).toBeLessThan(0.5)
+    }
+  })
+
+  test('A to B and back to A inside the fade redraws A at once, since no node moves', async ({ page }) => {
+    await ready(page)
+    await switchTo(page, 'console')
+    const started = await page.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          const press = (key: string) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key, code: `Digit${key}`, bubbles: true }))
+          press('4')
+          setTimeout(() => {
+            press('3')
+            // 300 ms later the console connectors are drawing; with the full morph delay they would still wait.
+            setTimeout(() => {
+              const group = document.querySelector('#stage [data-deco="console"]')
+              const drawing = group ? group.getAnimations({ subtree: true }).some((animation) => (animation.effect?.getComputedTiming().progress ?? 0) > 0) : false
+              resolve(drawing)
+            }, 300)
+          }, 60)
+        }),
+    )
+    expect(started).toBe(true)
+    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'console')
+  })
 
   test('decorations fade out in 180 ms, then nodes move 800 ms ease-out-quint with a 50 ms stagger', async ({ page }) => {
     await ready(page)

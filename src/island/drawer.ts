@@ -2,14 +2,17 @@
 // Nodes are any element carrying data-node="<domainId>"; clicks reach the drawer by delegation,
 // so a lens renderer only has to emit those buttons.
 import type { DomainId } from '../model/schema'
+import type { SourceLabel } from '../lib/provenance'
 import type { IslandData, IslandProof } from './data'
 import { el } from './dom'
 import { popModal, pushModal } from './modal'
 
 export type DrawerTarget = { domainId: DomainId } | { materialId: string }
 
-const BANDS: Record<string, string> = { language: 'Language', tool: 'Tool', discipline: 'Discipline' }
+const BANDS: Record<string, string> = { language: 'Language', stack: 'Framework or stack', tool: 'Platform or tool', discipline: 'Discipline' }
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+// How far a finger may move and still count as a tap.
+const TAP_SLOP_PX = 10
 
 let data: IslandData
 let drawer: HTMLElement
@@ -37,13 +40,20 @@ function section(heading: string, content: HTMLElement): HTMLElement {
   return el('div', { class: 'dr-sec' }, [el('h3', {}, [heading]), content])
 }
 
+// The same source label SourceTag.astro renders, shown only while the provenance toggle is on.
+function sourceTag(label: SourceLabel): HTMLElement {
+  return el('span', { class: 'src-tag', 'data-claim-source': '', 'data-source-kind': label.kind }, [
+    label.href ? el('a', { href: label.href }, [label.text]) : label.text,
+  ])
+}
+
 function proofList(proofs: IslandProof[]): HTMLElement {
   return el(
     'ol',
     { class: 'dr-proofs' },
     proofs.map((proof) => {
       const name = proof.href ? el('a', { href: proof.href }, [proof.label]) : el('b', {}, [proof.label])
-      return el('li', {}, [name, el('span', {}, [proof.detail])])
+      return el('li', { 'data-claim-id': `drawer-proof-${proof.id}` }, [name, el('span', {}, [proof.detail]), sourceTag(proof.source)])
     }),
   )
 }
@@ -75,7 +85,13 @@ function renderDomain(domainId: DomainId): void {
           'ul',
           { class: 'dr-up' },
           domain.upstream.map((item) =>
-            el('li', {}, [el('a', { href: item.href }, [item.label]), el('span', { class: `st-chip ${item.status}` }, [item.statusLabel])]),
+            el('li', {}, [
+              el('a', { href: item.href }, [item.label]),
+              el('span', { class: 'dr-st' }, item.statuses.map(({ status, label }) => el('span', { class: `st-chip ${status}` }, [label]))),
+              ...(item.links.length > 0
+                ? [el('ul', { class: 'dr-pins' }, item.links.map((link) => el('li', {}, [el('a', { href: link.href }, [link.note])])))]
+                : []),
+            ]),
           ),
         ),
       ),
@@ -99,6 +115,7 @@ function renderMaterial(materialId: string): void {
   eyebrow.textContent = BANDS[material.band] ?? material.band
   title.textContent = material.name
   body.replaceChildren(
+    el('p', { class: 'dr-src', 'data-claim-id': `drawer-material-${material.id}` }, [sourceTag(material.source)]),
     section(
       'Domains',
       el(
@@ -219,12 +236,33 @@ export function initDrawer(islandData: IslandData): void {
     }
   })
   // Everything outside is inert while open, so a press anywhere else closes the drawer.
-  // preventDefault keeps the press from moving focus off the node closeDrawer just focused.
-  document.addEventListener('pointerdown', (event) => {
-    if (!isDrawerOpen() || !(event.target instanceof Node) || drawer.contains(event.target)) return
+  // preventDefault keeps the press from moving focus off the node closeDrawer just focused; for a
+  // touch it stops the compatibility mousedown, and touch-action still lets the page scroll.
+  // A touch closes it only as a tap: a finger that moves, or a scroll that cancels the pointer,
+  // leaves it open, so a phone can scroll the page behind it.
+  const outside = (event: PointerEvent) => {
+    if (!isDrawerOpen() || !(event.target instanceof Node) || drawer.contains(event.target)) return false
     const palette = document.getElementById('palette')
-    if (palette && !palette.hidden) return
+    return !(palette && !palette.hidden)
+  }
+  let touch: { id: number; x: number; y: number } | null = null
+  document.addEventListener('pointerdown', (event) => {
+    if (!outside(event)) return
     event.preventDefault()
+    if (event.pointerType === 'touch') {
+      touch = { id: event.pointerId, x: event.clientX, y: event.clientY }
+      return
+    }
+    closeDrawer()
+  })
+  document.addEventListener('pointercancel', () => {
+    touch = null
+  })
+  document.addEventListener('pointerup', (event) => {
+    const start = touch
+    if (!start || event.pointerId !== start.id) return
+    touch = null
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > TAP_SLOP_PX || !outside(event)) return
     closeDrawer()
   })
   document.addEventListener('keydown', (event) => {

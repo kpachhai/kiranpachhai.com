@@ -1,12 +1,16 @@
 ---
 // The no-JS hero: identity plus the Index lens of the capability map. The island mounts on #stage later.
-import { model } from '../../model'
-import { languages, proofById, proofsInDomain } from '../../lib/site'
+import { cycleTitles, model } from '../../model'
+import { languages, proofById, proofsInDomain, upstreamIn } from '../../lib/site'
+import { STATUS_LABELS } from '../../model/labels'
+import SourceTag from '../SourceTag.astro'
 
-// The bill of materials: three bands, each row with where it is used and the areas of work involved.
+// The bill of materials: four bands, each row with where it is used and the areas of work involved.
+// The two middle bands use the toolkit's set names (Journey), so a part sits in the same group in both.
 const BANDS = [
-  { id: 'language', label: 'Languages', part: 'L' },
-  { id: 'tool', label: 'Tools and platforms', part: 'T' },
+  { id: 'language', label: 'Primary languages', part: 'L' },
+  { id: 'stack', label: 'Frameworks and stacks', part: 'F' },
+  { id: 'tool', label: 'Platforms and tools', part: 'T' },
   { id: 'discipline', label: 'Disciplines', part: 'D' },
 ] as const
 const areaNumbers = (proofIds: string[]) =>
@@ -18,6 +22,7 @@ const areaNumbers = (proofIds: string[]) =>
 const SECTIONS: [string, string][] = [
   ['#work', 'Selected work'],
   ['#methods', 'How I work'],
+  ['#journey', 'Journey'],
   ['#range', 'Range'],
   ['#timeline', 'Timeline'],
   ['#upstream', 'Upstream'],
@@ -27,14 +32,15 @@ const SECTIONS: [string, string][] = [
 
 <header class="hero wrap">
   <h1 class="name">{model.hero.name}<span class="dot" aria-hidden="true">.</span></h1>
-  <div class="intro">
+  <div class="intro" data-claim-id="hero">
     <div class="role-box" id="role-box" data-role-box>
       <p class="role">{model.hero.roleLine}</p>
     </div>
-    <p class="roles-held"><span class="eyebrow">Roles held</span> <span>{model.roles.map((role) => role.title).join(', ')}</span></p>
+    <p class="roles-held"><span class="eyebrow">Roles held</span> <span>{cycleTitles.join(', ')}</span></p>
     <p class="thesis">{model.hero.thesis}</p>
+    <SourceTag source={model.hero.source} />
     <p class="langs">
-      <span class="eyebrow">Languages</span>
+      <span class="eyebrow">Primary languages</span>
       {languages.map((name) => <span class="lang">{name}</span>)}
     </p>
   </div>
@@ -50,6 +56,10 @@ const SECTIONS: [string, string][] = [
       <button class="tool" type="button" id="intro-skip" hidden>Skip intro</button>
       <button class="tool" type="button" id="intro-replay">Replay intro</button>
     </div>
+    <div class="range-view js-only" role="group" aria-label="Range view">
+      <button class="tool" type="button" data-range-view="areas" aria-pressed="true">Areas x modes</button>
+      <button class="tool" type="button" data-range-view="roles" aria-pressed="false">Roles x hats</button>
+    </div>
     <ol class="index">
       {
         model.domains.map((domain, position) => {
@@ -62,12 +72,35 @@ const SECTIONS: [string, string][] = [
               </h3>
               <ul class="proofs">
                 {proofs.map((proof) => (
-                  <li>
+                  <li data-claim-id={`proof-${proof.id}`}>
                     {proof.href ? <a href={proof.href}>{proof.label}</a> : <span class="label">{proof.label}</span>}
                     <span class="detail">{proof.detail}</span>
+                    <SourceTag source={proof.source} />
                   </li>
                 ))}
               </ul>
+              {upstreamIn(domain.id).length > 0 && (
+                <div class="up-links" data-upstream={domain.id}>
+                  <h4 class="up-h">Upstream</h4>
+                  <ul>
+                    {upstreamIn(domain.id).map((row) => (
+                      <li>
+                        <a href={row.href}>{row.label}</a>{' '}
+                        <span class="up-st">{row.statuses.map((status) => STATUS_LABELS[status]).join(', ')}</span>
+                        {row.links.length > 0 && (
+                          <ul class="up-pins">
+                            {row.links.map((link) => (
+                              <li>
+                                <a href={link.href}>{link.note}</a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           )
         })
@@ -86,7 +119,7 @@ const SECTIONS: [string, string][] = [
               {model.materials
                 .filter((material) => material.band === band.id)
                 .map((material, position) => (
-                  <li data-material={material.id}>
+                  <li data-material={material.id} data-claim-id={`material-${material.id}`}>
                     <div class="bom-row">
                       <span class="pn" aria-hidden="true">{`${band.part}${position + 1}`}</span>
                       <span class="mt">{material.name}</span>
@@ -97,6 +130,7 @@ const SECTIONS: [string, string][] = [
                         ))}
                       </span>
                     </div>
+                    <SourceTag source={material.source} />
                   </li>
                 ))}
             </ol>
@@ -119,10 +153,11 @@ const SECTIONS: [string, string][] = [
   .role-box[data-cycling] .role { opacity: 0; }
   .role-box :global(.role-cycle) { position: absolute; left: 0; top: 0; right: 0; opacity: 0; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-family: var(--display); font-stretch: 82%; font-weight: 680; font-size: 1.25rem; line-height: 1.3; color: var(--ink); }
-  /* The roles held are listed statically when the line does not cycle: no JavaScript, or reduced motion. */
+  /* The roles held are listed statically when the line does not cycle: no JavaScript, reduced motion,
+     or a later page in the session (the cycle plays once; Base.astro marks it before first paint). */
   .roles-held { display: none; font-family: var(--mono); font-size: 0.75rem; line-height: 1.6; color: var(--muted); }
   .roles-held .eyebrow { margin-right: 6px; }
-  :global(html:not(.js)) .roles-held { display: block; }
+  :global(html:not(.js)) .roles-held, :global(html[data-roles-seen]) .roles-held { display: block; }
   @media (prefers-reduced-motion: reduce) {
     .roles-held { display: block; }
   }
@@ -141,18 +176,27 @@ const SECTIONS: [string, string][] = [
   .index { list-style: none; margin: 0; padding: 0; }
   .entry { padding-block: 18px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 32px; }
   .entry:last-child { border-bottom: 0; }
-  .entry-name { font-size: 2.75rem; line-height: 1.02; font-weight: 700; font-stretch: 82%; letter-spacing: 0.004em; }
+  .entry-name { font-size: 2.75rem; line-height: 1.02; font-weight: 700; font-stretch: 82%; letter-spacing: 0.004em; overflow-wrap: break-word; }
   .num { display: block; font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; color: var(--s-muted); margin-bottom: 6px; }
   .proofs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-family: var(--body); }
   .proofs li { display: grid; gap: 2px; }
   .proofs a, .label { font-weight: 600; color: var(--s-acc); }
   .label { color: var(--s-ink); }
   .detail { font-size: 0.95rem; color: var(--s-muted); line-height: 1.4; }
+  /* The curated upstream links per area. With JavaScript they move into the area's drawer instead. */
+  .up-links { grid-column: 2; font-family: var(--body); }
+  .up-h { font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--s-muted); margin: 4px 0 6px; }
+  .up-links ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .up-links a { color: var(--s-acc); overflow-wrap: anywhere; }
+  /* Several statuses wrap between words, so a long status list never widens the page at 200% text. */
+  .up-st { font-family: var(--mono); font-size: 0.6875rem; color: var(--s-muted); }
+  .up-links .up-pins { gap: 2px; margin-top: 2px; padding-left: 12px; border-left: 1px solid var(--rule); font-size: 0.95rem; }
   @media (max-width: 899px) {
     .hero { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 719px) {
     .entry { grid-template-columns: minmax(0, 1fr); }
     .entry-name { font-size: 1.6875rem; }
+    .up-links { grid-column: 1; }
   }
 </style>

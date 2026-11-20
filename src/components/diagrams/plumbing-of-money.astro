@@ -1,0 +1,31 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  'Interactive widgets and Python exercises build into the course, and post-build gates read the built course.'
+---
+
+<Diagram slug="plumbing-of-money" label={LABEL} wideHeight={138} narrowHeight={162}>
+  <Fragment slot="wide">
+    <Box i={0} x={20} y={40} w={100} h={34} label="Widgets" sub="interactive" />
+    <Box i={1} x={20} y={96} w={100} h={34} label="Exercises" sub="Python" />
+    <Box i={2} x={150} y={62} w={80} h={34} label="Build" />
+    <Box i={3} x={260} y={62} w={90} h={34} label="Gates" sub="post-build" em />
+    <Link i={4} d="M120 57H135V74H148" />
+    <Link i={5} d="M120 113H135V84H148" />
+    <Link i={6} d="M230 79H258" acc />
+    <Link i={7} d="M190 62V36H305V60" alt />
+    <text class="sm el" style="--i:7" x="247" y="30">read the built course</text>
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={108} h={34} label="Widgets" sub="interactive" />
+    <Box i={1} x={124} y={8} w={108} h={34} label="Exercises" sub="Python" />
+    <Box i={2} x={8} y={64} w={224} h={34} label="Build" />
+    <Box i={3} x={8} y={120} w={224} h={34} label="Post-build gates" sub="read the built course" em />
+    <Link i={4} d="M62 42V62" />
+    <Link i={5} d="M178 42V62" />
+    <Link i={6} d="M120 98V118" acc />
+  </Fragment>
+</Diagram>

@@ -11,6 +11,8 @@
 #stage.lensed .node-box > h3 { height: 100%; margin: 0; font-size: inherit; line-height: inherit; }
 /* The proof list stays in the accessibility tree; the drawer shows it visually. */
 #stage.lensed .node-box > .proofs { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The drawer lists each area's upstream links once the stage is lensed. */
+#stage.lensed .node-box > .up-links { display: none; }
 
 #stage.lensed .node { position: relative; display: flex; width: 100%; height: 100%; margin: 0; padding: 0; overflow: visible; text-align: left;
   color: var(--s-ink); background: transparent; border: 1.5px solid transparent; font: inherit; cursor: pointer;
@@ -69,6 +71,15 @@
 #stage[data-lens="range"] .n-title { font-size: 1.125rem; font-weight: 700; line-height: 1.15; }
 #stage[data-lens="range"] .n-meta { display: none; }
 #stage[data-lens="range"] .node:hover .n-title, #stage[data-lens="range"] .node[aria-expanded="true"] .n-title { color: var(--accent); }
+/* Range, roles x hats: the six areas become tiles above the matrix */
+#stage[data-lens="range"][data-range-view="roles"] .node { padding: 8px 10px; border-color: var(--rule); background: var(--paper); }
+#stage[data-lens="range"][data-range-view="roles"] .n-title { font-size: 0.9375rem; }
+#stage[data-lens="range"][data-range-view="roles"] .node[aria-expanded="true"] { border-color: var(--accent); }
+
+/* The Range view toggle, shown only in the Range lens */
+.range-view { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+#stage:not([data-lens="range"]) .range-view { display: none; }
+.range-view button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 
 @media (max-width: 719px) {
   #stage[data-lens="plan"] .node { padding-inline: 12px; }
@@ -81,6 +92,8 @@
   #stage[data-lens="index"] .n-meta { display: none; }
   #stage[data-lens="range"] .node { padding: 6px 0; }
   #stage[data-lens="range"] .n-title { font-size: 1rem; }
+  #stage[data-lens="range"][data-range-view="roles"] .node { padding: 6px 8px; }
+  #stage[data-lens="range"][data-range-view="roles"] .n-title { font-size: 0.9375rem; }
 }
 
 /* Decorations: one aria-hidden SVG layer, one lens group at a time */
@@ -151,17 +164,26 @@
 .range-cell ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .range-cell li { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .range-cell .n { font-family: var(--mono); font-size: 0.875rem; font-weight: 600; color: var(--accent); }
+.range-cell.range-hat { pointer-events: none; cursor: default; }
+.range-hat-head { height: 100%; display: flex; align-items: flex-end; padding: 0 6px 8px; font-family: var(--mono); font-size: 0.6875rem; line-height: 1.4;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); overflow-wrap: anywhere; }
+.range-hat-head.corner { padding-left: 0; }
+.range-role { display: grid; align-content: center; gap: 2px; height: 100%; padding: 7px 12px 7px 0; color: var(--ink); }
+.range-role b { font-family: var(--display); font-stretch: 82%; font-size: 0.9375rem; font-weight: 700; line-height: 1.2; }
+.range-role span { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); }
+.range-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 0.6875rem; line-height: 1.6; color: var(--muted); }
+.range-key b { color: var(--ink); font-weight: 600; }
 
 /* Plan extras: the language parts in the hub, balloon callouts, and the intro's assembly axes */
 .deco .part { transform-box: fill-box; transform-origin: center; }
 .deco .part-box { fill: var(--plan-ground); stroke: var(--plan-line); stroke-width: 1.5; }
-.deco .svg-part { font-family: var(--mono); font-size: 0.53125rem; letter-spacing: 0.02em; fill: var(--plan-ink); }
+.deco .svg-part { font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.02em; fill: var(--plan-ink); }
 .deco .cal-c { fill: var(--plan-ground); stroke: var(--s-line); stroke-width: 1.2; }
-.deco .cal-n { font-family: var(--mono); font-size: 0.59375rem; font-weight: 600; fill: var(--s-ink); }
+.deco .cal-n { font-family: var(--mono); font-size: 0.625rem; font-weight: 600; fill: var(--s-ink); }
 .deco .cal-t { font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.03em; fill: var(--s-ink); }
 .deco .ax { fill: none; stroke: var(--plan-muted); stroke-width: 1; stroke-dasharray: 14 4 2 4; }
 @media (max-width: 719px) {
-  .deco .cal-t { font-size: 0.55rem; letter-spacing: 0; }
+  .deco .cal-t { letter-spacing: 0; }
 }
 
 /* Bill of materials: under the Plan drawing. Static rows without the island; buttons with it. */
@@ -184,6 +206,7 @@ button.bom-row:focus-visible { outline: 2px solid var(--s-acc); outline-offset: 
 .bom-row .mt { font-family: var(--display); font-stretch: 80%; font-weight: 700; font-size: 0.9375rem; text-transform: uppercase; letter-spacing: 0.03em; overflow-wrap: anywhere; }
 .bom-row .used { color: var(--s-muted); overflow-wrap: anywhere; }
 .bom-row .dm { display: inline-flex; gap: 3px; white-space: nowrap; }
+.bom-list .src-tag { padding: 0 12px 8px calc(3ch + 26px); }
 .bom-row .dm i { font-style: normal; border: 1px solid var(--s-line); padding: 0 4px; font-size: 0.625rem; }
 @media (max-width: 719px) {
   .bom-row { grid-template-columns: 3ch minmax(0, 1fr) auto; }

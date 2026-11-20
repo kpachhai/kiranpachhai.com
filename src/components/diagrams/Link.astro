@@ -1,0 +1,14 @@
+---
+// One edge of a case-study diagram. alt draws it dashed (a check or a choice), acc in the accent.
+interface Props {
+  i: number
+  d: string
+  alt?: boolean
+  acc?: boolean
+  arrow?: boolean
+}
+
+const { i, d, alt = false, acc = false, arrow = true } = Astro.props
+---
+
+<path class:list={['lk', { alt, acc }]} style={`--i:${i}`} d={d} marker-end={arrow ? 'url(#dg-arrow)' : undefined} />

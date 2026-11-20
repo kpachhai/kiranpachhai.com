@@ -77,12 +77,23 @@ async function switchLens(id: LensId, animate: boolean, persist: boolean): Promi
   if (id === current) return
   const mine = ++generation
   const stage = stageRoot
+  const previous = current
+  const leavingId = entered
   current = id
   const context: LensContext = { stage, from: shown, to: id, animate: animate && !prefersReducedMotion() }
-  const leaving = entered ? renderers.get(entered) : undefined
+  const leaving = leavingId ? renderers.get(leavingId) : undefined
   entered = null
   if (leaving?.leave) {
-    await leaving.leave(context)
+    try {
+      await leaving.leave(context)
+    } catch (error) {
+      // A rejected leave undoes the switch, so asking for the same lens again retries it.
+      if (mine === generation) {
+        current = previous
+        entered = leavingId
+      }
+      throw error
+    }
     if (mine !== generation) return
   }
   stage.dataset.lens = id
@@ -105,6 +116,18 @@ export function setLens(id: LensId, opts: { animate?: boolean } = {}): Promise<v
 export function startLens(stage: HTMLElement): Promise<void> {
   stageRoot = stage
   return switchLens(lensFromHash(window.location.hash) ?? DEFAULT_LENS, false, false)
+}
+
+// The lens last shown, kept for the session so case-study pages draw their diagram in it
+// (read before first paint by the inline script in work/[slug].astro).
+export const LENS_KEY = 'kp-lens'
+
+export function rememberLens(id: LensId): void {
+  try {
+    window.sessionStorage.setItem(LENS_KEY, id)
+  } catch {
+    // Storage unavailable: case-study pages fall back to the default lens.
+  }
 }
 
 // Theme. The inline script in Base.astro applies the stored value before first paint;
@@ -154,6 +177,8 @@ export function shortcutsEnabled(): boolean {
   return shortcutsOn
 }
 
+const shortcutSubscribers = new Set<(on: boolean) => void>()
+
 export function setShortcutsEnabled(on: boolean): void {
   shortcutsOn = on
   try {
@@ -162,6 +187,19 @@ export function setShortcutsEnabled(on: boolean): void {
   } catch {
     // Storage unavailable: the choice holds for this visit.
   }
+  for (const cb of shortcutSubscribers) cb(on)
+}
+
+export function onShortcutsChange(cb: (on: boolean) => void): () => void {
+  shortcutSubscribers.add(cb)
+  return () => shortcutSubscribers.delete(cb)
+}
+
+// The lens a press of 1 to 5 asks for, or null. The physical key (code) is read first, so a layout
+// that needs Shift for digits (AZERTY) still works; the typed character is the fallback.
+export function lensForKey(event: Pick<KeyboardEvent, 'key' | 'code'>): LensId | null {
+  const digit = /^(?:Digit|Numpad)([1-5])$/.exec(event.code)?.[1] ?? (/^[1-5]$/.test(event.key) ? event.key : null)
+  return digit ? LENSES[Number(digit) - 1] : null
 }
 
 // Once-per-session flags (the intro, the role cycle). Storage can throw; the flag then reads unset,

@@ -68,19 +68,19 @@
       "domainId": "agents"
     },
     {
-      "label": "Wallet snap reviews and fixes",
+      "label": "Hedera wallet snap",
       "href": "https://github.com/hashgraph/hedera-metamask-snaps",
       "status": "merged",
       "domainId": "wallets"
     },
     {
-      "label": "Wallet snap reviews and fixes",
+      "label": "Hedera wallet snap",
       "href": "https://github.com/hashgraph/hedera-metamask-snaps",
       "status": "review",
       "domainId": "wallets"
     },
     {
-      "label": "Wallet snap reviews and fixes",
+      "label": "Hedera wallet snap",
       "href": "https://github.com/hashgraph/hedera-metamask-snaps",
       "status": "commits",
       "domainId": "wallets"
@@ -140,13 +140,13 @@
       "domainId": "explainers"
     },
     {
-      "label": "HyperVM SDK discussions",
+      "label": "HyperSDK",
       "href": "https://github.com/ava-labs/hypersdk",
       "status": "discussion",
       "domainId": "protocol"
     },
     {
-      "label": "Snaps platform discussions",
+      "label": "Snaps platform",
       "href": "https://github.com/MetaMask/snaps",
       "status": "discussion",
       "domainId": "wallets"
@@ -162,6 +162,36 @@
       "href": "https://github.com/elastos/Elastos.Developer.Website",
       "status": "commits",
       "domainId": "explainers"
+    },
+    {
+      "label": "An L1 SDK (2024)",
+      "href": "https://github.com/Nuklai/nuklai-js-sdk",
+      "status": "review",
+      "domainId": "chains"
+    },
+    {
+      "label": "An L1 SDK (2024)",
+      "href": "https://github.com/Nuklai/nuklai-js-sdk",
+      "status": "commits",
+      "domainId": "chains"
+    },
+    {
+      "label": "An L1 wallet (2024)",
+      "href": "https://github.com/Nuklai/nuklai-wallet",
+      "status": "review",
+      "domainId": "chains"
+    },
+    {
+      "label": "An L1 wallet (2024)",
+      "href": "https://github.com/Nuklai/nuklai-wallet",
+      "status": "commits",
+      "domainId": "chains"
+    },
+    {
+      "label": "redis_exporter",
+      "href": "https://github.com/oliver006/redis_exporter",
+      "status": "merged",
+      "domainId": "chains"
     }
   ],
   "commitsByYear": {

@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
-import { model } from '../../src/model'
+import { cycleTitles, model } from '../../src/model'
 
 // The exploded-assembly intro on the Plan lens, the bill of materials it ends on, and the role
 // cycle in the hero. Every test starts in a fresh browser context, so sessionStorage is empty and
 // a first visit plays the intro unless reduced motion is on.
 const INTRO_KEY = 'kp-intro-seen'
 const BANDS = [
-  { id: 'language', label: 'Languages' },
-  { id: 'tool', label: 'Tools and platforms' },
+  { id: 'language', label: 'Primary languages' },
+  { id: 'stack', label: 'Frameworks and stacks' },
+  { id: 'tool', label: 'Platforms and tools' },
   { id: 'discipline', label: 'Disciplines' },
 ] as const
 const proofLabel = (id: string) => model.proofs.find((proof) => proof.id === id)!.label
@@ -193,7 +194,7 @@ test.describe('first visit at 390 px, dark', () => {
 test.describe('bill of materials', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('three bands from the model; each row lists where used and opens the drawer as a material', async ({ page }) => {
+  test('four bands from the model; each row lists where used and opens the drawer as a material', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await loaded(page)
     const bom = page.locator('#stage .bom')
@@ -270,7 +271,7 @@ test.describe('reduced motion', () => {
 
     const held = page.locator('.roles-held')
     await expect(held).toBeVisible()
-    for (const role of model.roles) await expect(held).toContainText(role.title)
+    for (const title of cycleTitles) await expect(held).toContainText(title)
     await expect(page.locator('.role-cycle')).toHaveCount(0)
     await expect(page.locator('.hero .role')).toHaveText(model.hero.roleLine)
     expect(await page.evaluate(() => document.getAnimations().length)).toBe(0)
@@ -290,6 +291,28 @@ test.describe('reduced motion', () => {
 
 test.describe('role cycle', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('a later page in the session lists the roles held, from first paint', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem('kp-roles-seen', '1')
+      window.sessionStorage.setItem('kp-intro-seen', '1')
+    })
+    await page.goto('/')
+    const held = page.locator('.roles-held')
+    await expect(held).toBeVisible()
+    for (const title of cycleTitles) await expect(held).toContainText(title)
+    await expect(page.locator('html')).toHaveAttribute('data-roles-seen', '')
+  })
+
+  test('keys 1 to 5 leave the intro running while shortcuts are off', async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('kp-shortcuts', 'off'))
+    await page.goto('/')
+    await expect(page.locator('#intro-skip')).toBeVisible()
+    await page.keyboard.press('3')
+    await page.waitForTimeout(150)
+    await expect(page.locator('#stage')).toHaveAttribute('data-intro', /.+/)
+    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'plan')
+  })
 
   test('cycles once through the roles, settles on the role line, and shifts nothing', async ({ page }) => {
     await page.addInitScript(() => {
@@ -342,12 +365,12 @@ test.describe('role cycle', () => {
     expect(new Set(heights).size, `role box heights ${heights.join(', ')}`).toBe(1)
 
     const log = await page.evaluate(() => (window as unknown as { roleLog: { seen: string[]; shifts: string[] } }).roleLog)
-    expect(log.seen).toEqual(model.roles.map((role) => role.title))
+    expect(log.seen).toEqual(cycleTitles)
     expect(log.shifts).toEqual([])
     await expect(page.locator('.hero .role')).toHaveText(model.hero.roleLine)
     await expect(page.locator('.hero .role')).toHaveCSS('opacity', '1')
     await expect(page.locator('.roles-held')).toBeHidden()
-    for (const role of model.roles) for (const text of live) expect(text).not.toContain(role.title)
+    for (const title of cycleTitles) for (const text of live) expect(text).not.toContain(title)
   })
 
   test('runs once per session', async ({ page }) => {
@@ -386,6 +409,17 @@ test.describe('focus when Skip hides', () => {
     await expect(page.locator(`#stage [data-node="${model.domains[0].id}"]`)).toBeFocused()
     expectAssembled(await introState(page), 'reduced motion mid-intro')
   })
+
+  test('with Replay hidden and the nodes unable to take focus, focus on Skip moves to the stage', async ({ page }) => {
+    await loaded(page)
+    await page.locator('#intro-skip').focus()
+    // The nodes cannot take focus: their box is inert.
+    await page.evaluate(() => document.querySelector('#stage .stage-box')!.setAttribute('inert', ''))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expect(page.locator('#intro-replay')).toBeHidden()
+    await expect(page.locator('#stage')).toBeFocused()
+    await expect(page.locator('#stage')).toHaveAttribute('tabindex', '-1')
+  })
 })
 
 test.describe('other cancel paths', () => {
@@ -415,6 +449,67 @@ test.describe('other cancel paths', () => {
 // At a 720 px viewport the stage box is 688 px, so Plan uses its two-column layout; 1024 covers the
 // three-column sheet with the revision table below it, and 1280 the sheet with the table beside it.
 const leads = model.domains.map((domain) => model.proofs.find((proof) => proof.domainId === domain.id)!.label)
+// The settled Plan drawing: balloons, labels and hub parts inside the stage with no overlap.
+async function expectPlanExtras(page: Page, width: number) {
+  const report = await page.evaluate(async () => {
+    await document.fonts.ready
+    const stage = document.querySelector('#stage .stage-box')!.getBoundingClientRect()
+    type Item = { kind: string; id: string; left: number; top: number; right: number; bottom: number }
+    const items: Item[] = []
+    const add = (kind: string, id: string, element: Element) => {
+      const rect = element.getBoundingClientRect()
+      items.push({ kind, id, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom })
+    }
+    document.querySelectorAll<HTMLElement>('#stage .node-box').forEach((box) => {
+      add('node', box.dataset.domain!, box)
+      const num = box.querySelector('.n-num')
+      if (num) add('num', box.dataset.domain!, num)
+    })
+    document.querySelectorAll('#stage [data-deco="plan"] .cal').forEach((call, i) => {
+      add('balloon', String(i), call.querySelector('.cal-c')!)
+      add('label', String(i), call.querySelector('.cal-t')!)
+    })
+    document.querySelectorAll('#stage [data-part]').forEach((part) => add('part', (part as SVGGElement).dataset.part!, part.querySelector('rect')!))
+    add('hub', 'hub', document.querySelector('#stage .hub-box')!)
+    add('dim', 'dim', document.querySelector('#stage [data-phase="dim"] .gap-bg')!)
+    add('sheet', 'sheet', document.querySelector('#stage .plan-sheet')!)
+    const outside = [...document.querySelectorAll('#stage [data-deco="plan"] .cal, #stage [data-part], #stage .hub-box')]
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.left < stage.left - 1 || rect.right > stage.right + 1 || rect.top < stage.top - 1 || rect.bottom > stage.bottom + 1).length
+    const allowed = (a: Item, b: Item) =>
+      (a.kind === 'hub' && b.kind === 'part') || (b.kind === 'hub' && a.kind === 'part') || (a.id === b.id && [a.kind, b.kind].sort().join() === 'node,num')
+    const overlaps: string[] = []
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i]
+        const b = items[j]
+        if (allowed(a, b)) continue
+        const hit = a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5
+        if (hit) overlaps.push(`${a.kind} ${a.id} / ${b.kind} ${b.id}`)
+      }
+    }
+    const labels = [...document.querySelectorAll('#stage [data-deco="plan"] .cal-t')].map((label) => ({
+      text: label.textContent ?? '',
+      squeezed: label.hasAttribute('textLength'),
+    }))
+    return { outside, overlaps, labels, scroll: document.documentElement.scrollWidth, counts: items.reduce<Record<string, number>>((all, item) => ({ ...all, [item.kind]: (all[item.kind] ?? 0) + 1 }), {}) }
+  })
+  expect(report.counts).toMatchObject({ node: 6, num: 6, balloon: 6, label: 6, part: 4, hub: 1, dim: 1, sheet: 1 })
+  expect(report.outside, 'elements outside the stage').toBe(0)
+  expect(report.overlaps).toEqual([])
+  expect(report.scroll).toBe(width)
+  report.labels.forEach((label, i) => {
+    const full = leads[i]
+    expect(label.squeezed, `label ${i} condensed`).toBe(false)
+    if (label.text === full) return
+    // Cut only at a word boundary, followed by the ellipsis, and never down to nothing.
+    expect(label.text.endsWith('…'), `label ${i}: ${label.text}`).toBe(true)
+    const kept = label.text.slice(0, -1)
+    expect(kept.length, `label ${i}`).toBeGreaterThan(0)
+    expect(full.startsWith(`${kept} `), `label ${i}: ${label.text} vs ${full}`).toBe(true)
+  })
+}
+
 for (const width of [390, 720, 1024, 1280]) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test.describe(`settled Plan extras at ${width} px, ${colorScheme}`, () => {
@@ -424,64 +519,24 @@ for (const width of [390, 720, 1024, 1280]) {
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await loaded(page)
         await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'plan')
-        const report = await page.evaluate(async () => {
-          await document.fonts.ready
-          const stage = document.querySelector('#stage .stage-box')!.getBoundingClientRect()
-          type Item = { kind: string; id: string; left: number; top: number; right: number; bottom: number }
-          const items: Item[] = []
-          const add = (kind: string, id: string, element: Element) => {
-            const rect = element.getBoundingClientRect()
-            items.push({ kind, id, left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom })
-          }
-          document.querySelectorAll<HTMLElement>('#stage .node-box').forEach((box) => {
-            add('node', box.dataset.domain!, box)
-            const num = box.querySelector('.n-num')
-            if (num) add('num', box.dataset.domain!, num)
-          })
-          document.querySelectorAll('#stage [data-deco="plan"] .cal').forEach((call, i) => {
-            add('balloon', String(i), call.querySelector('.cal-c')!)
-            add('label', String(i), call.querySelector('.cal-t')!)
-          })
-          document.querySelectorAll('#stage [data-part]').forEach((part) => add('part', (part as SVGGElement).dataset.part!, part.querySelector('rect')!))
-          add('hub', 'hub', document.querySelector('#stage .hub-box')!)
-          add('dim', 'dim', document.querySelector('#stage [data-phase="dim"] .gap-bg')!)
-          add('sheet', 'sheet', document.querySelector('#stage .plan-sheet')!)
-          const outside = [...document.querySelectorAll('#stage [data-deco="plan"] .cal, #stage [data-part], #stage .hub-box')]
-            .map((element) => element.getBoundingClientRect())
-            .filter((rect) => rect.left < stage.left - 1 || rect.right > stage.right + 1 || rect.top < stage.top - 1 || rect.bottom > stage.bottom + 1).length
-          const allowed = (a: Item, b: Item) =>
-            (a.kind === 'hub' && b.kind === 'part') || (b.kind === 'hub' && a.kind === 'part') || (a.id === b.id && [a.kind, b.kind].sort().join() === 'node,num')
-          const overlaps: string[] = []
-          for (let i = 0; i < items.length; i++) {
-            for (let j = i + 1; j < items.length; j++) {
-              const a = items[i]
-              const b = items[j]
-              if (allowed(a, b)) continue
-              const hit = a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5
-              if (hit) overlaps.push(`${a.kind} ${a.id} / ${b.kind} ${b.id}`)
-            }
-          }
-          const labels = [...document.querySelectorAll('#stage [data-deco="plan"] .cal-t')].map((label) => ({
-            text: label.textContent ?? '',
-            squeezed: label.hasAttribute('textLength'),
-          }))
-          return { outside, overlaps, labels, scroll: document.documentElement.scrollWidth, counts: items.reduce<Record<string, number>>((all, item) => ({ ...all, [item.kind]: (all[item.kind] ?? 0) + 1 }), {}) }
-        })
-        expect(report.counts).toMatchObject({ node: 6, num: 6, balloon: 6, label: 6, part: 4, hub: 1, dim: 1, sheet: 1 })
-        expect(report.outside, 'elements outside the stage').toBe(0)
-        expect(report.overlaps).toEqual([])
-        expect(report.scroll).toBe(width)
-        report.labels.forEach((label, i) => {
-          const full = leads[i]
-          expect(label.squeezed, `label ${i} condensed`).toBe(false)
-          if (label.text === full) return
-          // Cut only at a word boundary, followed by the ellipsis, and never down to nothing.
-          expect(label.text.endsWith('…'), `label ${i}: ${label.text}`).toBe(true)
-          const kept = label.text.slice(0, -1)
-          expect(kept.length, `label ${i}`).toBeGreaterThan(0)
-          expect(full.startsWith(`${kept} `), `label ${i}: ${label.text} vs ${full}`).toBe(true)
-        })
+        await expectPlanExtras(page, width)
       })
     })
   }
+}
+
+// The same checks after the intro plays out with motion on, so the settle it ends on is the one measured.
+for (const width of [390, 1280]) {
+  test.describe(`Plan extras after the intro plays at ${width} px`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test('balloons, labels and hub parts sit inside the stage with no overlap', async ({ page }) => {
+      await loaded(page)
+      await expect(page.locator('#intro-skip')).toBeVisible()
+      await expect(page.locator('#intro-skip')).toBeHidden({ timeout: 8000 })
+      await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'plan')
+      await expect.poll(() => page.evaluate(() => document.querySelector('#stage .stage-box')!.getAnimations({ subtree: true }).length)).toBe(0)
+      await expectPlanExtras(page, width)
+    })
+  })
 }

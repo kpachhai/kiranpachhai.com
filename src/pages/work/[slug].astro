@@ -2,7 +2,19 @@
 import type { GetStaticPaths } from 'astro'
 import Base from '../../layouts/Base.astro'
 import { model, type CaseStudy } from '../../model'
+import { Image, getImage } from 'astro:assets'
 import { domainName, methodName, proofById } from '../../lib/site'
+import SourceTag from '../../components/SourceTag.astro'
+import ProvenanceToggle from '../../components/ProvenanceToggle.astro'
+import ScheduleService from '../../components/diagrams/schedule-service.astro'
+import SignscopeSnap from '../../components/diagrams/signscope-snap.astro'
+import HipExplorerAgent from '../../components/diagrams/hip-explorer-agent.astro'
+import CrossLedgerExplorer from '../../components/diagrams/cross-ledger-explorer.astro'
+import PlumbingOfMoney from '../../components/diagrams/plumbing-of-money.astro'
+import OnchainFinanceTemplate from '../../components/diagrams/onchain-finance-template.astro'
+import netting from '../../assets/work/plumbing/netting.webp'
+import poolTrade from '../../assets/work/plumbing/pool-trade.webp'
+import mortgage from '../../assets/work/plumbing/mortgage.webp'
 
 export const getStaticPaths = (() =>
   model.caseStudies.map((study) => ({ params: { slug: study.slug }, props: { study } }))) satisfies GetStaticPaths
@@ -16,29 +28,63 @@ const proofs = study.proofIds.map(proofById)
 const lead = proofs[0]
 const methodIds = [...new Set(proofs.flatMap((proof) => proof.methods))]
 const SECTIONS = [
-  ['Problem', study.problem],
-  ['Approach', study.approach],
+  ['Problem', 'problem', study.problem],
+  ['Approach', 'approach', study.approach],
 ] as const
+
+const DIAGRAMS = {
+  'schedule-service': ScheduleService,
+  'signscope-snap': SignscopeSnap,
+  'hip-explorer-agent': HipExplorerAgent,
+  'cross-ledger-explorer': CrossLedgerExplorer,
+  'plumbing-of-money': PlumbingOfMoney,
+  'onchain-finance-template': OnchainFinanceTemplate,
+} as const
+const Diagram = DIAGRAMS[study.slug as keyof typeof DIAGRAMS]
+if (!Diagram) throw new Error(`case study without a diagram: ${study.slug}`)
+
+// Screenshots of the live course's widgets, captured from the course site.
+const SCREENS: Record<string, { src: ImageMetadata; alt: string }[]> = {
+  'plumbing-of-money': [
+    { src: netting, alt: 'Course widget: four banks owe each other in both directions, with buttons to compare gross settlement, bilateral netting and multilateral netting, and counters for the payments to make and the cash that must move.' },
+    { src: poolTrade, alt: 'Course widget: a slider sells token A into a constant-product pool of A and B and shows the amount received and the price impact.' },
+    { src: mortgage, alt: 'Course widget: a slider steps through the months of a fixed-rate mortgage and shows how each equal payment splits between interest and principal.' },
+  ],
+}
+// Each screenshot links to its full-width variant, since a phone shows it too small to read.
+const screens = await Promise.all(
+  (SCREENS[study.slug] ?? []).map(async (screen) => ({ ...screen, full: (await getImage({ src: screen.src, width: 1200, format: 'webp' })).src })),
+)
+// Case-study pages have no lens switch; they draw in the lens last shown on the home page.
+const LENS_SCRIPT = `try{var l=sessionStorage.getItem('kp-lens');if(['plan','terrain','console','index','range'].indexOf(l)>=0)document.documentElement.setAttribute('data-lens',l)}catch(e){}`
 ---
 
 <Base title={`${study.title} | ${model.hero.name}`} description={study.problem.text} path={`/work/${study.slug}/`} ogImage={`/og/${study.slug}.png`}>
+  <Fragment slot="head"><script is:inline set:html={LENS_SCRIPT} /></Fragment>
   <main class="wrap case">
-    <nav class="crumbs" aria-label="Breadcrumb">
-      <a href="/">{model.hero.name}</a>
-      <span aria-hidden="true">/</span>
-      <a href="/#work">Selected work</a>
-    </nav>
+    <div class="top">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/">{model.hero.name}</a>
+        <span aria-hidden="true">/</span>
+        <a href="/#work">Selected work</a>
+      </nav>
+      <ProvenanceToggle />
+    </div>
     <header class="head">
       <span class="eyebrow">{domainName(lead.domainId)}</span>
       <h1>{study.title}</h1>
-      <p class="lead">{lead.detail}</p>
+      <p class="lead" data-claim-id={`lead-${lead.id}`}>{lead.detail}<SourceTag source={lead.source} /></p>
+      <Diagram />
     </header>
     <div class="body">
       {
-        SECTIONS.map(([heading, field]) => (
+        SECTIONS.map(([heading, key, field]) => (
           <section>
             <h2>{heading}</h2>
-            <p>{field.text}</p>
+            <p data-claim-id={`case-${study.slug}-${key}`}>
+              {field.text}
+              <SourceTag source={field.source} />
+            </p>
           </section>
         ))
       }
@@ -56,31 +102,51 @@ const SECTIONS = [
             </ul>
           )
         }
-        <p>{study.methods.text}</p>
+        <p data-claim-id={`case-${study.slug}-methods`}>
+          {study.methods.text}
+          <SourceTag source={study.methods.source} />
+        </p>
       </section>
       <section>
         <h2>Outcome</h2>
-        <p>{study.outcome.text}</p>
+        <p data-claim-id={`case-${study.slug}-outcome`}>
+          {study.outcome.text}
+          <SourceTag source={study.outcome.source} />
+        </p>
       </section>
       <section>
         <h2>Proof</h2>
         <ul class="proof">
           {
             proofs.map((proof) => (
-              <li>
+              <li data-claim-id={`proof-${proof.id}`}>
                 {proof.href ? <a href={proof.href}>{proof.label}</a> : <span>{proof.label}</span>}
                 {proof.private && <span class="note">Private repository</span>}
+                <SourceTag source={proof.source} />
               </li>
             ))
           }
         </ul>
       </section>
     </div>
+    {
+      screens.length > 0 && (
+        <section class="screens" aria-labelledby="screens-h">
+          <h2 id="screens-h">From the course</h2>
+          {screens.map((screen) => (
+            <a class="shot" href={screen.full}>
+              <Image src={screen.src} alt={screen.alt} widths={[600, 1200]} sizes="(max-width: 899px) 100vw, 860px" loading="lazy" />
+            </a>
+          ))}
+        </section>
+      )
+    }
   </main>
 </Base>
 
 <style>
   .case { padding-block: 32px 0; }
+  .top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
   .crumbs { display: flex; flex-wrap: wrap; gap: 6px 10px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
   .head { border-bottom: 1px solid var(--ink); padding-block: 28px 18px; margin-bottom: 8px; }
   h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 0.98; font-weight: 750; font-stretch: 82%; margin: 10px 0 14px; }
@@ -94,6 +160,8 @@ const SECTIONS = [
   .letter { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 0.7rem; font-weight: 600; }
   .proof { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-family: var(--mono); font-size: 0.8rem; }
   .note { color: var(--muted); margin-left: 10px; }
+  .screens { display: grid; gap: 18px; max-width: 860px; padding-top: 8px; }
+  .screens img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); }
   @media (max-width: 719px) {
     .body { grid-template-columns: minmax(0, 1fr); }
   }

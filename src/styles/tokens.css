@@ -6,7 +6,7 @@
   --con-ground: #F3F4EE; --con-band: #E3E9DD; --con-ink: #1A1F1A; --con-muted: #555E57; --con-acc: #1C39D4;
   --display: "Bricolage Grotesque", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Newsreader", Georgia, "Times New Roman", serif;
-  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "Martian Mono", "Martian Mono Fallback", "Martian Mono Fallback Consolas", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);
 }
@@ -33,4 +33,5 @@
 [data-lens="terrain"] { --s-ground: var(--ter-ground); --s-ink: var(--ter-ink); --s-muted: var(--ter-muted); --s-line: var(--water); --s-acc: var(--summit); --s-font: var(--display); }
 [data-lens="console"] { --s-ground: var(--con-ground); --s-ink: var(--con-ink); --s-muted: var(--con-muted); --s-line: var(--con-muted); --s-acc: var(--con-acc); --s-font: var(--mono); }
 [data-lens="index"] { --s-ground: var(--panel); --s-ink: var(--ink); --s-muted: var(--muted); --s-line: var(--accent); --s-acc: var(--accent); --s-font: var(--body); }
+/* Range is a matrix over the same paper as Index; its cells, not its ground, carry the lens. */
 [data-lens="range"] { --s-ground: var(--panel); --s-ink: var(--ink); --s-muted: var(--muted); --s-line: var(--accent); --s-acc: var(--accent); --s-font: var(--body); }

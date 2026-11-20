@@ -1,12 +1,10 @@
-import { execSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { model } from '../../src/model'
 
-// Builds into its own folder so it never races build.test.ts over dist/.
-const out = mkdtempSync(join(tmpdir(), 'seo-dist-'))
+// Reads the single dist/ built by tests/unit/build-once.ts (vitest globalSetup).
+const out = join(process.cwd(), 'dist')
 const SITE = 'https://kiranpachhai.com'
 const MOVED: [string, string][] = [
   ['about', `${SITE}/#timeline`],
@@ -31,12 +29,11 @@ describe('seo', () => {
   let pages: { file: string; route: string; html: string }[] = []
 
   beforeAll(() => {
-    execSync(`npx astro build --outDir ${out}`, { stdio: 'pipe' })
     pages = htmlFiles(out).map((file) => {
       const route = '/' + file.slice(out.length + 1).replace(/index\.html$/, '')
       return { file, route, html: readFileSync(file, 'utf8') }
     })
-  }, 180_000)
+  })
 
   it('finds all eleven pages', () => {
     expect(pages.length).toBe(11)
@@ -52,6 +49,10 @@ describe('seo', () => {
       expect(metaContent(html, 'property', 'og:url'), route).toBe(canonicalOf(html))
       expect(metaContent(html, 'property', 'og:type'), route).toBeTruthy()
       expect(metaContent(html, 'name', 'twitter:card'), route).toBe('summary_large_image')
+      expect(metaContent(html, 'name', 'twitter:image'), route).toBe(metaContent(html, 'property', 'og:image'))
+      expect(metaContent(html, 'property', 'og:site_name'), route).toBe('Kiran Pachhai')
+      expect(metaContent(html, 'property', 'og:locale'), route).toBe('en_US')
+      expect(html, route).not.toMatch(/twitter:creator/)
       expect(metaContent(html, 'property', 'og:image'), route).toMatch(/^https:\/\/kiranpachhai\.com\/og\/[a-z0-9-]+\.png$/)
     }
   })
@@ -86,7 +87,12 @@ describe('seo', () => {
       '@type': 'Person',
       name: 'Kiran Pachhai',
       url: `${SITE}/`,
-      sameAs: ['https://github.com/kpachhai', 'https://www.linkedin.com/in/kiranpachhai'],
+      sameAs: [
+        'https://github.com/kpachhai',
+        'https://www.linkedin.com/in/kiranpachhai',
+        'https://www.youtube.com/channel/UCu1XxDJE84ZvgLJ-EssbveA',
+        'https://twitter.com/mr_pachhai',
+      ],
     })
     for (const { route, html } of pages) {
       expect(html, route).not.toMatch(/"(email|address|telephone|worksFor|jobTitle)"/)
@@ -99,6 +105,19 @@ describe('seo', () => {
       expect(html, slug).toContain('<meta name="robots" content="noindex"')
       expect(canonicalOf(html), slug).toBe(target)
     }
+  })
+
+  it('gives every canonical a trailing-slash path; only the 404 file keeps its file name', () => {
+    for (const { route, html } of pages) {
+      const path = new URL(canonicalOf(html)!).pathname
+      if (route === '/404.html') expect(path, route).toBe('/404.html')
+      else expect(path, route).toMatch(/\/$/)
+    }
+  })
+
+  it('keeps the 404 page out of search results', () => {
+    const html = pages.find((page) => page.route === '/404.html')!.html
+    expect(html).toContain('<meta name="robots" content="noindex"')
   })
 
   it('lists indexable pages in the sitemap and leaves out moved pages and 404', () => {

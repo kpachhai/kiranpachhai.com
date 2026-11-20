@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { model } from '../../src/model'
-import { EMPLOYER_DIGESTS, HEDGES } from '../../scripts/gates/copy-rules'
-import { findViolations, scanHtml } from '../../scripts/gates/copy-scan'
+import { COMPOUND_DIGESTS, EMPLOYER_DIGESTS, HEDGES } from '../../scripts/gates/copy-rules'
+import { DEFAULT_EMPLOYER_DIGESTS, InvalidJsonLd, findViolations, scanHtml, scanJs } from '../../scripts/gates/copy-scan'
 
 const digest = (term: string) => createHash('sha256').update(term).digest('hex')
 const employerDigests = [digest('acme'), digest('acme corp')]
@@ -125,6 +125,78 @@ describe('scanHtml non-text sources', () => {
     const head = '<script>var a = "Acme Corp"</script><style>.a{content:"Acme Corp"}</style>'
     expect(scanHtml(page('<a href="/acme">x</a><img src="/acme.png">', head), options)).toEqual([])
   })
+
+  it('reads a whole attribute value that contains ">"', () => {
+    expect(scanHtml(page('<a href="/x" title="a > Acme Corp">x</a>'), options)).toContainEqual(acme)
+    // Nothing after the ">" leaks into the visible text either.
+    expect(scanHtml(page('<a href="/x" data-note="1 > Acme Corp">x</a>'), options)).toEqual([])
+  })
+
+  it('never reads tag-like strings inside a script body as markup', () => {
+    const body = '<script>const html = \'<img alt="Acme Corp">\'; const t = "<b title=\\"Acme\\">"</script><p>clean</p>'
+    expect(scanHtml(page(body), options)).toEqual([])
+  })
+
+  it('catches a term split across inline markup, once', () => {
+    expect(scanHtml(page('<p>Ac<b>me</b> wrote it</p>'), options)).toEqual([{ rule: 'employer', match: 'Acme' }])
+    expect(scanHtml(page('<p>Acme team</p>'), options)).toEqual([{ rule: 'employer', match: 'Acme' }])
+  })
+
+  it('treats a plural as the term', () => {
+    expect(findViolations('two Acmes met', options)).toEqual([{ rule: 'employer', match: 'Acmes' }])
+  })
+
+  it('throws a named error on invalid ld+json', () => {
+    const broken = page('<p>x</p>', '<script type="application/ld+json">{"name": </script>')
+    expect(() => scanHtml(broken, options)).toThrow(InvalidJsonLd)
+  })
+})
+
+// A product name can run an employer term into another word: at a case break the scan reads
+// the parts, and a one-word compound with no break is listed by its own digest.
+describe('employer terms inside one-word names', () => {
+  it('reads a compound at its case breaks and reports the whole word', () => {
+    expect(findViolations('runs on AcmeVM today', options)).toEqual([{ rule: 'employer', match: 'AcmeVM' }])
+    expect(findViolations('the AcmeCorpHub app', options)).toEqual([{ rule: 'employer', match: 'AcmeCorpHub' }])
+    expect(findViolations('MyAcme2', options)).toEqual([{ rule: 'employer', match: 'MyAcme2' }])
+  })
+
+  it('leaves words without a break, and unrelated compounds, alone', () => {
+    expect(findViolations('an Academy on macOS with JavaScript', options)).toEqual([])
+    expect(findViolations('acmevm', options)).toEqual([])
+  })
+
+  it('flags a listed one-word compound with no case break', () => {
+    expect(findViolations('runs acmevm', { employerDigests: [digest('acmevm')] })).toEqual([{ rule: 'employer', match: 'acmevm' }])
+  })
+
+  it('ships well-formed compound digests that the default scan uses', () => {
+    expect(COMPOUND_DIGESTS.length).toBeGreaterThan(0)
+    for (const entry of COMPOUND_DIGESTS) {
+      expect(entry).toMatch(/^[0-9a-f]{64}$/)
+      expect(EMPLOYER_DIGESTS).not.toContain(entry)
+      expect(DEFAULT_EMPLOYER_DIGESTS).toContain(entry)
+    }
+    for (const entry of EMPLOYER_DIGESTS) expect(DEFAULT_EMPLOYER_DIGESTS).toContain(entry)
+  })
+})
+
+describe('JSON data and built JavaScript', () => {
+  it('scans a JSON data block in a page, but not its URLs', () => {
+    const data = (json: object) => `<p>x</p><script type="application/json" id="island-data">${JSON.stringify(json)}</script>`
+    expect(scanHtml(data({ domains: [{ label: 'Acme Corp' }] }), options)).toContainEqual({ rule: 'employer', match: 'Acme Corp' })
+    expect(scanHtml(data({ href: 'https://github.com/acme/repo' }), options)).toEqual([])
+    expect(() => scanHtml('<script type="application/json">{"a": </script>', options)).toThrow(InvalidJsonLd)
+  })
+
+  it('scans string literals in a bundle, decoding escapes', () => {
+    expect(scanJs('const a="Acme Corp";', options)).toContainEqual({ rule: 'employer', match: 'Acme Corp' })
+    expect(scanJs("el('span',{},['\\u0041cme team'])", options)).toContainEqual({ rule: 'employer', match: 'Acme' })
+    expect(scanJs('const t=`by ${who}, AcmeVM`', options)).toContainEqual({ rule: 'employer', match: 'AcmeVM' })
+    expect(scanJs('const s="draft"', options)).toContainEqual({ rule: 'hedge', match: 'draft' })
+    expect(scanJs('const s="Fast \\u2014 clear"', options)).toContainEqual({ rule: 'emdash', match: '\u2014' })
+    expect(scanJs('function acme(corp){return corp+1}', options)).toEqual([])
+  })
 })
 
 describe('copy-scan cli', () => {
@@ -132,6 +204,15 @@ describe('copy-scan cli', () => {
 
   it('exits 2 when the directory is missing', () => {
     expect(run('does-not-exist-dir').status).toBe(2)
+  })
+
+  it('exits 2 when the directory holds no .html or .js file to scan', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'copy-scan-empty-'))
+    const empty = run(directory)
+    expect(empty.status).toBe(2)
+    expect(empty.stderr).toContain('nothing was scanned')
+    writeFileSync(join(directory, 'notes.txt'), 'an illustrative note')
+    expect(run(directory).status).toBe(2)
   })
 
   it('exits 0 on clean output and 1 with file: rule: match on a violation', () => {
@@ -142,5 +223,23 @@ describe('copy-scan cli', () => {
     const result = run(directory)
     expect(result.status).toBe(1)
     expect(result.stdout).toContain('b.html: email: a@b.com')
+  })
+
+  it('scans built JavaScript files and names the file on a violation', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'copy-scan-'))
+    writeFileSync(join(directory, 'a.html'), fixture('clean.html'))
+    writeFileSync(join(directory, 'island.js'), 'export const note = "an illustrative figure"\n')
+    const result = run(directory)
+    expect(result.status).toBe(1)
+    expect(result.stdout).toContain('island.js: hedge: illustrative')
+  })
+
+  it('exits 2 and names the file when its ld+json is invalid', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'copy-scan-'))
+    writeFileSync(join(directory, 'a.html'), fixture('clean.html'))
+    writeFileSync(join(directory, 'broken.html'), '<html><head><script type="application/ld+json">{"name": </script></head><body>x</body></html>')
+    const result = run(directory)
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('broken.html: invalid ld+json')
   })
 })

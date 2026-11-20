@@ -17,6 +17,11 @@ export const EMPLOYER_DIGESTS: string[] = [
   '3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b',
 ]
 
+// One-word product names that run an employer term into another word with no space or case
+// break, so neither the n-gram scan nor the case split can see the term inside them. Same
+// hashing as above (the lowercase token).
+export const COMPOUND_DIGESTS: string[] = ['0f9ba39125320fe733f4000f834520d5d4bb5ead805eed864fc6f12f6bf93955']
+
 export const HEDGES: string[] = [
   'unconfirmed',
   'draft',

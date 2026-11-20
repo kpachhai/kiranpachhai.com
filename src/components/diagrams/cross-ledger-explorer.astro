@@ -1,0 +1,34 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  'Two ledger plugins, one reading EVM ledgers over JSON-RPC and one reading Hiero ledgers through the mirror node, feed an explorer of CLPR channels and message journeys. The plugins sit behind a conformance suite, and each journey can be replayed with evidence at every step.'
+---
+
+<Diagram slug="cross-ledger-explorer" label={LABEL} wideHeight={176} narrowHeight={218}>
+  <Fragment slot="wide">
+    <Box i={0} x={4} y={14} w={100} h={36} label="EVM plugin" sub="JSON-RPC" />
+    <Box i={1} x={4} y={76} w={100} h={36} label="Hiero plugin" sub="mirror node" />
+    <Box i={2} x={130} y={45} w={100} h={36} label="Explorer" sub="CLPR channels" em />
+    <Box i={3} x={256} y={45} w={100} h={36} label="Replay" sub="evidence per step" />
+    <Box i={4} x={4} y={136} w={118} h={34} label="Conformance suite" />
+    <Link i={5} d="M104 32H116V57H128" />
+    <Link i={6} d="M104 94H116V69H128" />
+    <Link i={7} d="M230 63H254" acc />
+    <Link i={8} d="M54 136V114" alt />
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={108} h={34} label="EVM plugin" sub="JSON-RPC" />
+    <Box i={1} x={124} y={8} w={108} h={34} label="Hiero plugin" sub="mirror node" />
+    <Box i={2} x={8} y={64} w={224} h={34} label="Explorer" sub="CLPR channels" em />
+    <Box i={3} x={8} y={120} w={224} h={34} label="Replay" sub="evidence per step" />
+    <Box i={4} x={8} y={176} w={224} h={34} label="Conformance suite" />
+    <Link i={5} d="M62 42V62" />
+    <Link i={6} d="M178 42V62" />
+    <Link i={7} d="M120 98V118" acc />
+    <Link i={8} d="M8 193H3V25H6" alt />
+    <Link i={9} d="M232 193H237V25H234" alt />
+  </Fragment>
+</Diagram>

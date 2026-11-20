@@ -1,7 +1,15 @@
-import type { Material } from '../schema'
+import type { Material, Source } from '../schema'
+import { skills } from './skills'
 import { LINKEDIN, OWNER, url } from './sources'
 
 const GH = 'https://github.com'
+
+// A part that is also a toolkit skill carries the skill's source, so the two never disagree.
+function toolkitSource(id: string): Source {
+  const skill = skills.find((entry) => entry.id === id)
+  if (!skill) throw new Error(`materials: no toolkit skill ${id}`)
+  return skill.source
+}
 
 export const materials: Material[] = [
   // Languages, in the order of the bill of materials
@@ -34,26 +42,20 @@ export const materials: Material[] = [
     source: LINKEDIN,
   },
 
-  // Tools and platforms, each evidenced by a proof
-  { id: 'foundry', band: 'tool', name: 'Foundry', usedIn: ['hts721-suite', 'erc-8004-registries'], source: url(`${GH}/kpachhai/hts721-example`) },
-  {
-    id: 'hardhat',
-    band: 'tool',
-    name: 'Hardhat',
-    usedIn: ['erc-8004-registries', 'web3-101-course'],
-    source: url(`${GH}/kpachhai/erc-8004-contracts-hardhat3`),
-  },
+  // Frameworks and stacks, then platforms and tools, grouped and sourced as in the toolkit
+  { id: 'foundry', band: 'stack', name: 'Foundry', usedIn: ['hts721-suite', 'erc-8004-registries'], source: toolkitSource('foundry') },
+  { id: 'hardhat', band: 'stack', name: 'Hardhat', usedIn: ['erc-8004-registries', 'web3-101-course'], source: toolkitSource('hardhat') },
   {
     id: 'metamask-snaps',
-    band: 'tool',
+    band: 'stack',
     name: 'MetaMask Snaps',
     usedIn: ['signscope-snap', 'hedera-wallet-snap', 'identify-snap'],
-    source: url(`${GH}/kpachhai/signscope-snap`),
+    source: toolkitSource('metamask-snaps'),
   },
-  { id: 'mcp', band: 'tool', name: 'MCP', usedIn: ['hip-explorer-agent'], source: OWNER },
-  { id: 'prometheus', band: 'tool', name: 'Prometheus', usedIn: ['rsyslog-exporter'], source: LINKEDIN },
-  { id: 'grafana', band: 'tool', name: 'Grafana', usedIn: ['rsyslog-exporter'], source: LINKEDIN },
-  { id: 'docker', band: 'tool', name: 'Docker', usedIn: ['tx-analysis'], source: url(`${GH}/kpachhai/hedera-tx-analysis`) },
+  { id: 'mcp', band: 'tool', name: 'MCP', usedIn: ['hip-explorer-agent'], source: toolkitSource('mcp') },
+  { id: 'prometheus', band: 'tool', name: 'Prometheus', usedIn: ['rsyslog-exporter'], source: toolkitSource('prometheus') },
+  { id: 'grafana', band: 'tool', name: 'Grafana', usedIn: ['rsyslog-exporter'], source: toolkitSource('grafana') },
+  { id: 'docker', band: 'tool', name: 'Docker', usedIn: ['tx-analysis'], source: toolkitSource('docker') },
 
   // Disciplines
   {

@@ -13,9 +13,17 @@ export type LensModel = IslandData
 export interface LensModule {
   layout(stage: StageRect, m: LensModel, opts?: LayoutOptions): NodeLayout[]
   height(width: number, m: LensModel, opts?: LayoutOptions): number
-  decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel): Animation[]
+  // opts are the ones layout() used, so the decorations are a function of their inputs.
+  decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel, opts?: LayoutOptions): Animation[]
   // Gives back what decorate made outside the SVG layer (Terrain's canvas and its loop).
   release?(): void
+}
+
+// A lazily imported module is checked before use: a retry can resolve to a chunk that is not a lens.
+export function isLensModule(value: unknown): value is LensModule {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return ['layout', 'height', 'decorate'].every((name) => typeof candidate[name] === 'function')
 }
 
 export const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'

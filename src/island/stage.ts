@@ -18,8 +18,10 @@ import {
   EASE,
   FADE_MS,
   MORPH_MS,
+  type LayoutOptions,
   type LensModule,
   type NodeLayout,
+  isLensModule,
   methodsOf,
   proofCount,
   rootRem,
@@ -48,6 +50,8 @@ let shown: LensId | null = null
 let openDomain: DomainId | null = null
 let operation = 0
 let releaseShown: (() => void) | null = null
+// The layout options the shown lens was laid out with; its decorations are drawn with the same ones.
+let shownOpts: LayoutOptions = { rem: 16 }
 
 const settledAll = (animations: Animation[]) =>
   Promise.all(animations.map((animation) => animation.finished.then(() => undefined, () => undefined)))
@@ -136,7 +140,7 @@ function draw(lens: LensId, width: number, height: number): Animation[] {
   sizeDecorations(width, height)
   const module = moduleOf(lens)
   releaseShown = module.release ?? null
-  return module.decorate(svg, layouts, data)
+  return module.decorate(svg, layouts, data, shownOpts)
 }
 
 function render(lens: LensId, requested: boolean): Promise<void> {
@@ -153,6 +157,7 @@ function render(lens: LensId, requested: boolean): Promise<void> {
   const opts = { rem: rootRem() }
   let height = module.height(width, data, opts)
   layouts = module.layout({ width, height }, data, opts)
+  shownOpts = opts
   shown = lens
   box.style.height = `${height}px`
   let decorations = draw(lens, width, height)
@@ -170,9 +175,12 @@ function render(lens: LensId, requested: boolean): Promise<void> {
     return Promise.resolve()
   }
   box.animate([{ height: `${fromHeight}px` }, { height: `${height}px` }], { duration: MORPH_MS, easing: EASE })
+  // The draw-in waits for the nodes to settle; when none moves (A to B to A inside the fade), it starts at once.
+  const anyMove = layouts.some((rect) => nodeBox(rect.domainId).getAnimations().length > 0)
+  const drawInAt = anyMove ? DRAW_IN_AT : 0
   for (const animation of decorations) {
     const timing = animation.effect?.getTiming()
-    animation.effect?.updateTiming({ delay: DRAW_IN_AT + Number(timing?.delay ?? 0) })
+    animation.effect?.updateTiming({ delay: drawInAt + Number(timing?.delay ?? 0) })
   }
   return Promise.all([moved, settledAll(decorations)]).then(() => {
     if (mine === operation && currentLens() === lens) stage.dataset.settled = lens
@@ -188,11 +196,31 @@ async function leave(context: LensContext): Promise<void> {
     clearDecorations()
     return
   }
-  for (const layer of layers) for (const animation of layer.getAnimations({ subtree: true })) animation.cancel()
+  // Pausing (not cancelling) holds a half-drawn line where it is while it fades; a cancelled
+  // draw-in would jump to the full stroke first.
+  const held = layers.flatMap((layer) => layer.getAnimations({ subtree: true }))
+  for (const animation of held) animation.pause()
   const fades = layers.map((layer) => layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: 'linear', fill: 'forwards' }))
   await settledAll(fades)
+  // Faded out, the held animations are cancelled so whatever waits on them settles.
+  for (const animation of held) animation.cancel()
   // A newer enter has already cleared the layer and drawn its own lens; leave it alone.
   if (mine === operation) clearDecorations()
+}
+
+// Re-lays the shown lens in place (the Range view toggle) with the same fade, morph and draw-in
+// as a lens switch. A newer relayout or a lens switch that starts during the fade wins, so fast
+// presses draw the lens once, for the last choice.
+let relayouts = 0
+
+export async function relayout(): Promise<void> {
+  const lens = shown
+  if (!lens || lens !== currentLens()) return
+  const mine = ++relayouts
+  const animate = !prefersReducedMotion()
+  await leave({ stage, from: lens, to: lens, animate })
+  if (mine !== relayouts || currentLens() !== lens) return
+  await render(lens, animate)
 }
 
 // A lens not yet loaded keeps the stage as it is (same height, nodes where they stand) and marks
@@ -204,18 +232,43 @@ let entering = 0
 let retries = 0
 
 // Browsers keep a failed module fetch in their module map, so importing the same URL again rejects
-// without a request. Chromium and Firefox name the chunk in the error; a retry imports that
-// same-origin URL with a fresh query. Without a URL the plain import is tried again.
-function chunkUrlOf(error: unknown): string | undefined {
-  const match = (error instanceof Error ? error.message : String(error)).match(/https?:\/\/[^\s'"]+?\.js\b/)
+// without a request. Chromium and Firefox name the chunk in the error; WebKit does not, so its URL
+// comes from the page's modulepreload link. A retry imports that same-origin URL with a fresh
+// query. Without a URL the plain import is tried again.
+// A message whose URL does not parse yields no URL, so the caller's revert always runs.
+export function chunkUrlOf(error: unknown, origin: string): string | undefined {
+  // A built chunk is .js; the dev server serves the source module (.ts) under the same scheme.
+  const match = (error instanceof Error ? error.message : String(error)).match(/https?:\/\/[^\s'"]+?\.(?:[cm]?js|tsx?)\b/)
   if (!match) return undefined
-  const url = new URL(match[0])
-  return url.origin === window.location.origin ? `${url.origin}${url.pathname}` : undefined
+  try {
+    const url = new URL(match[0])
+    return url.origin === origin ? `${url.origin}${url.pathname}` : undefined
+  } catch {
+    return undefined
+  }
 }
 
-function loadLens(lens: LensId, load: () => Promise<LensModule>): Promise<LensModule> {
+// WebKit names no URL in the error. The chunk is still on the page as the modulepreload link the
+// bundler's preload helper added for it, named after the lens module.
+export function chunkUrlFromPreloads(hrefs: string[], lens: LensId, origin: string): string | undefined {
+  for (const href of hrefs) {
+    try {
+      const url = new URL(href, origin)
+      if (url.origin === origin && new RegExp(`/${lens}\\.[^/]*\\.js$`).test(url.pathname)) return `${url.origin}${url.pathname}`
+    } catch {
+      // Not a URL: not the chunk.
+    }
+  }
+  return undefined
+}
+
+const preloadHrefs = () => [...document.querySelectorAll<HTMLLinkElement>('link[rel="modulepreload"]')].map((link) => link.href)
+
+async function loadLens(lens: LensId, load: () => Promise<LensModule>): Promise<LensModule> {
   const url = failedUrl[lens]
-  return url ? (import(/* @vite-ignore */ `${url}?retry=${++retries}`) as Promise<LensModule>) : load()
+  const loaded: unknown = url ? await import(/* @vite-ignore */ `${url}?retry=${++retries}`) : await load()
+  if (!isLensModule(loaded)) throw new Error(`stage: the ${lens} module has no lens API`)
+  return loaded
 }
 const LOAD_FAILED = 'Terrain view could not load.'
 
@@ -230,12 +283,15 @@ async function enter(context: LensContext): Promise<void> {
   const load = LAZY[lens]
   if (!load) throw new Error(`stage: no module for lens ${lens}`)
   stage.setAttribute('aria-busy', 'true')
+  // While the module loads, the stage keeps the look of the lens it still shows; the controls
+  // already name the new lens. data-lens moves on once the lens can draw.
+  if (context.from && context.from !== lens) stage.dataset.lens = context.from
   try {
     MODULES[lens] = await (loading[lens] ??= loadLens(lens, load))
   } catch (error) {
     // Forget the failed load so the next press tries again.
     delete loading[lens]
-    failedUrl[lens] ??= chunkUrlOf(error)
+    failedUrl[lens] ??= chunkUrlOf(error, window.location.origin) ?? chunkUrlFromPreloads(preloadHrefs(), lens, window.location.origin)
     if (mine !== entering) return
     stage.removeAttribute('aria-busy')
     if (currentLens() === lens) await revert(context, error)
@@ -244,6 +300,7 @@ async function enter(context: LensContext): Promise<void> {
   if (mine !== entering) return
   stage.removeAttribute('aria-busy')
   if (currentLens() !== lens) return
+  stage.dataset.lens = lens
   return render(lens, context.animate)
 }
 

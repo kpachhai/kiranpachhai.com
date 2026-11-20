@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
 import { model } from '../../src/model'
 import { buildIslandData } from '../../src/island/data'
+import { sourceLabel } from '../../src/lib/provenance'
+import { upstream } from '../../src/lib/site'
 import type { NodeLayout } from '../../src/island/lenses/shared'
 import * as plan from '../../src/island/lenses/plan'
 import * as consoleLens from '../../src/island/lenses/console'
@@ -8,7 +12,7 @@ import * as index from '../../src/island/lenses/index'
 import * as range from '../../src/island/lenses/range'
 import * as terrain from '../../src/island/lenses/terrain'
 
-const data = buildIslandData(model)
+const data = buildIslandData(model, (source) => sourceLabel(source), upstream)
 const LENSES = { plan, terrain, console: consoleLens, index, range }
 const WIDTHS = [390, 720, 1280]
 const REM = [16, 32]
@@ -63,6 +67,52 @@ describe('range cells', () => {
   })
 })
 
+describe('range roles x hats view', () => {
+  afterEach(() => range.setView('areas'))
+
+  for (const width of WIDTHS) {
+    for (const rem of REM) {
+      it(`at ${width} px (rem ${rem}) keeps the six area nodes inside the stage with no overlap`, () => {
+        range.setView('roles')
+        const stage = { width, height: range.height(width, data, { rem }) }
+        const nodes = range.layout(stage, data, { rem })
+        expect(nodes.map((node) => node.domainId)).toEqual(data.domains.map((domain) => domain.id))
+        for (const node of nodes) {
+          expect(node.variant).toBe('range')
+          expect(node.x + node.w, node.domainId).toBeLessThanOrEqual(stage.width)
+          expect(node.y + node.h, node.domainId).toBeLessThanOrEqual(stage.height)
+          expect(Math.min(node.x, node.y, node.w, node.h), node.domainId).toBeGreaterThanOrEqual(0)
+        }
+        for (let first = 0; first < nodes.length; first++) {
+          for (let second = first + 1; second < nodes.length; second++) {
+            expect(overlaps(nodes[first], nodes[second]), `${nodes[first].domainId} / ${nodes[second].domainId}`).toBe(false)
+          }
+        }
+      })
+    }
+  }
+
+  it('lays the nodes out differently from the areas view', () => {
+    const stage = { width: 1280, height: 2000 }
+    const areas = range.layout(stage, data, { rem: 16 })
+    range.setView('roles')
+    expect(range.layout(stage, data, { rem: 16 })).not.toEqual(areas)
+  })
+
+  it('fills a cell only where a role wears that hat', () => {
+    const filled = range.hatCells(data).filter((cell) => cell.on)
+    expect(filled.map((cell) => `${cell.roleId}/${cell.hat}`).sort()).toEqual(
+      model.roles.flatMap((role) => role.hats.map((hat) => `${role.id}/${hat}`)).sort(),
+    )
+    expect(range.hatCells(data)).toHaveLength(model.roles.length * model.hats.length)
+  })
+
+  it('grows when the root font size doubles', () => {
+    range.setView('roles')
+    expect(range.height(390, data, { rem: 32 })).toBeGreaterThan(range.height(390, data, { rem: 16 }))
+  })
+})
+
 describe('plan revision table', () => {
   it('lists the five current methods with the domains whose proofs use them', () => {
     const rows = plan.revisions(data)
@@ -90,5 +140,15 @@ describe('plan balloon callouts', () => {
     expect(labels).toEqual(model.domains.map((domain) => model.proofs.find((proof) => proof.domainId === domain.id)!.label))
     for (const label of labels) expect(label.length).toBeGreaterThan(0)
     expect(labels.join(' ')).not.toMatch(/HIP-?\d/)
+  })
+})
+
+describe('lens modules', () => {
+  // decorate takes the layout options as an argument, so no lens reads the live root font size.
+  it('never read the root font size themselves', () => {
+    for (const lens of ['plan', 'terrain', 'console', 'index', 'range']) {
+      const source = readFileSync(join(process.cwd(), 'src', 'island', 'lenses', `${lens}.ts`), 'utf8')
+      expect(source, lens).not.toMatch(/\brootRem\s*\(/)
+    }
   })
 })

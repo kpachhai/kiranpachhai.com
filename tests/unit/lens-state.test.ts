@@ -91,3 +91,46 @@ describe('setLens with overlapping switches', () => {
     expect(stage.dataset.lens).toBe('index')
   })
 })
+
+describe('setLens when leave rejects', () => {
+  it('keeps the old lens current, so a repeat switch to the same target runs again', async () => {
+    const state = await import('../../src/island/state')
+    const stage = { dataset: {} as Record<string, string> } as unknown as HTMLElement
+    let failNext = true
+    const calls: string[] = []
+    state.registerLens('plan', {
+      enter: () => void calls.push('enter plan'),
+      leave: () => {
+        calls.push('leave plan')
+        if (failNext) {
+          failNext = false
+          return Promise.reject(new Error('leave failed'))
+        }
+      },
+    })
+    state.registerLens('console', { enter: () => void calls.push('enter console') })
+    await state.startLens(stage)
+
+    await expect(state.setLens('console')).rejects.toThrow('leave failed')
+    expect(state.currentLens()).toBe('plan')
+    expect(stage.dataset.lens).toBe('plan')
+
+    await state.setLens('console')
+    expect(state.currentLens()).toBe('console')
+    expect(stage.dataset.lens).toBe('console')
+    expect(pressed()).toEqual(['console'])
+    expect(calls).toEqual(['enter plan', 'leave plan', 'leave plan', 'enter console'])
+  })
+})
+
+describe('lensForKey', () => {
+  it('reads the physical digit key first, so AZERTY and the number pad work', async () => {
+    const { lensForKey } = await import('../../src/island/state')
+    expect(lensForKey({ key: '1', code: 'Digit1' })).toBe('plan')
+    expect(lensForKey({ key: '"', code: 'Digit3' })).toBe('console')
+    expect(lensForKey({ key: '5', code: 'Numpad5' })).toBe('range')
+    expect(lensForKey({ key: '2', code: '' })).toBe('terrain')
+    expect(lensForKey({ key: '6', code: 'Digit6' })).toBeNull()
+    expect(lensForKey({ key: 'a', code: 'KeyA' })).toBeNull()
+  })
+})

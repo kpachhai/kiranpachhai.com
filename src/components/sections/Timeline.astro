@@ -1,6 +1,8 @@
 ---
 import { model } from '../../model'
 import { github } from '../../lib/site'
+import { CONTRIBUTIONS_URL } from '../../../scripts/data/fetch-github'
+import SourceTag from '../SourceTag.astro'
 
 // Positions on a shared year axis; "to now" ends at the GitHub data date.
 const FIRST_YEAR = 2010
@@ -31,11 +33,12 @@ const ticks = Array.from({ length: Math.floor((lastYear - FIRST_YEAR) / 2) + 1 }
   <div class="sec-head"><h2 id="tl-h">Timeline</h2><span class="eyebrow">{FIRST_YEAR} to now, to scale</span></div>
   <ol class="tl">
     {
-      rows.map((row) => (
-        <li class:list={['tl-row', { edu: row.kind === 'education' }]}>
+      rows.map((row, index) => (
+        <li class:list={['tl-row', { edu: row.kind === 'education' }]} data-claim-id={`timeline-${index}`}>
           <div class="who">
             <b>{row.title}</b>
             <span class="yr">{row.years}</span>
+            <SourceTag source={row.source} />
           </div>
           <div class="track" aria-hidden="true">
             <span class="bar" style={`left:${row.left};width:${row.width}`} />
@@ -45,7 +48,10 @@ const ticks = Array.from({ length: Math.floor((lastYear - FIRST_YEAR) / 2) + 1 }
     }
   </ol>
   <div class="density">
-    <p class="lbl" id="dens-h">Public commits to other people's repositories, per year</p>
+    <div data-claim-id="timeline-commits">
+      <p class="lbl" id="dens-h">Public commits to other people's repositories, per year</p>
+      <SourceTag source={{ kind: 'url', url: CONTRIBUTIONS_URL }} />
+    </div>
     <ol class="dens" aria-labelledby="dens-h">
       {
         commitYears.map((entry) => (

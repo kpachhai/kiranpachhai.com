@@ -20,7 +20,6 @@ import {
   lineCount,
   methodsOf,
   present,
-  rootRem,
   scaleOf,
   svgEl,
 } from './shared'
@@ -308,13 +307,22 @@ function paint(state: Live, progress: number): void {
 
 const drifting = (state: Live) => state.onscreen && !document.hidden && !prefersReducedMotion()
 
+// At most 15 frames a second on any display, for the ripple and the drift alike: the clock
+// advances one frame period per painted frame, and catches up after a long pause.
+function frameDue(state: Live, now: number): boolean {
+  if (now - state.last > FRAME_MS * 4) state.last = now - FRAME_MS
+  if (now - state.last < FRAME_MS - 2) return false
+  state.last += FRAME_MS
+  return true
+}
+
 function tick(now: number): void {
   const state = live
   if (!state) return
   state.raf = 0
   const progress = rippleProgress(state)
   if (progress < 1) {
-    if (progress !== state.painted) paint(state, progress)
+    if (progress !== state.painted && frameDue(state, now)) paint(state, progress)
     state.raf = requestAnimationFrame(tick)
     return
   }
@@ -323,10 +331,7 @@ function tick(now: number): void {
     if (state.painted !== 1) paint(state, 1)
     return
   }
-  // At most 15 frames a second on any display: the clock advances one frame period per frame.
-  if (now - state.last > FRAME_MS * 4) state.last = now - FRAME_MS
-  if (now - state.last >= FRAME_MS - 2) {
-    state.last += FRAME_MS
+  if (frameDue(state, now)) {
     state.t += DRIFT_STEP
     state.lines = null
     paint(state, 1)
@@ -401,11 +406,11 @@ function drawLegend(group: SVGGElement, relief: Relief, m: LensModel): Animation
   return fadeIn(block, 300, 400)
 }
 
-export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel): Animation[] {
+export function decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel, opts?: LayoutOptions): Animation[] {
   release()
   const width = Number(svg.getAttribute('width'))
   const height = Number(svg.getAttribute('height'))
-  const relief = summitsOf(layouts, width, m, { rem: rootRem() })
+  const relief = summitsOf(layouts, width, m, opts)
   const group = decoGroup(svg, 'terrain')
 
   const canvas = document.createElement('canvas')

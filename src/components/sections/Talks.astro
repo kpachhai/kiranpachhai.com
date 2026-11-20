@@ -1,5 +1,6 @@
 ---
 import { model, type Talk } from '../../model'
+import SourceTag from '../SourceTag.astro'
 
 const KIND_LABELS: Record<Talk['kind'], string> = {
   talk: 'Talk',
@@ -16,10 +17,11 @@ const meta = (talk: Talk) => [KIND_LABELS[talk.kind], talk.date].filter(Boolean)
   <ul class="talks">
     {
       model.talks.map((talk) => (
-        <li>
+        <li data-claim-id={`talk-${talk.id}`}>
           <span class="k">{meta(talk)}</span>
           <b>{talk.href ? <a href={talk.href}>{talk.title}</a> : talk.title}</b>
           {talk.detail && <span class="d">{talk.detail}</span>}
+          <SourceTag source={talk.source} />
         </li>
       ))
     }

@@ -45,8 +45,12 @@ let data: IslandData
 
 export const isPaletteOpen = () => !palette.hidden
 
-function scrollToMethods(): void {
-  document.getElementById('methods')?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+// Each method has its own anchor in How I work; the palette scrolls to it and moves focus there.
+function scrollToMethod(id: string): void {
+  const target = document.getElementById(`method-${id.toLowerCase()}`)
+  if (!target) throw new Error(`palette: How I work has no anchor for method ${id}`)
+  target.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+  target.focus({ preventScroll: true })
 }
 
 function buildEntries(): Entry[] {
@@ -68,7 +72,7 @@ function buildEntries(): Entry[] {
     ...make('proof', proof.label, domainName(proof.domainId), () => openDrawer({ domainId: proof.domainId }), proof.detail),
     proofId: proof.id,
   }))
-  const methods = data.methods.map((method) => make('method', `${method.id} ${method.name}`, 'How I work', scrollToMethods))
+  const methods = data.methods.map((method) => make('method', `${method.id} ${method.name}`, 'How I work', () => scrollToMethod(method.id)))
   const materials = data.materials.map((material) =>
     make('material', material.name, material.band, () => openDrawer({ materialId: material.id })),
   )
@@ -86,7 +90,7 @@ function buildEntries(): Entry[] {
   )
   const commands = [
     ...data.domains.map((domain) => make('command', `kp ${domain.id}`, domain.name, () => openDrawer({ domainId: domain.id }))),
-    ...data.methods.map((method) => make('command', `kp ${method.id.toLowerCase()}`, method.name, scrollToMethods)),
+    ...data.methods.map((method) => make('command', `kp ${method.id.toLowerCase()}`, method.name, () => scrollToMethod(method.id))),
     ...LENSES.map((lens) => make('command', `kp ${lens}`, 'lens', () => void setLens(lens))),
   ]
   return [...domains, ...proofs, ...methods, ...materials, ...modes, ...lenses, ...themes, shortcuts, ...commands]
@@ -218,8 +222,21 @@ export function initPalette(islandData: IslandData): void {
   palette.addEventListener('click', (event) => {
     if (event.target === palette) closePalette()
   })
+  // A press on the box outside the input (its padding, its footer, a "No match" row) keeps focus in
+  // the input, so Esc, the arrows and Tab keep working; option clicks still run.
+  palette.querySelector('.pal-box')?.addEventListener('mousedown', (event) => {
+    if (event.target !== input) event.preventDefault()
+  })
+  palette.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+      event.preventDefault()
+      closePalette()
+    }
+  })
   document.addEventListener('keydown', (event) => {
-    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+    // Ctrl or Cmd plus K, read from the physical key too so non-Latin layouts work; Shift is left alone.
+    const k = event.code === 'KeyK' || event.key.toLowerCase() === 'k'
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && k) {
       event.preventDefault()
       if (isPaletteOpen()) closePalette()
       else openPalette()

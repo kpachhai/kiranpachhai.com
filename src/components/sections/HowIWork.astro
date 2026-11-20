@@ -1,5 +1,6 @@
 ---
 import { model } from '../../model'
+import SourceTag from '../SourceTag.astro'
 
 const pipeline = model.methods.map((method) => ({
   ...method,
@@ -13,10 +14,11 @@ const pipeline = model.methods.map((method) => ({
   <ol class="pipe">
     {
       pipeline.map((method) => (
-        <li>
+        <li id={`method-${method.id.toLowerCase()}`} tabindex="-1" data-claim-id={`method-${method.id}`}>
           <span class="gl" aria-hidden="true">{method.id}</span>
           <h3>{method.name}</h3>
           {method.summary && <p>{method.summary}</p>}
+          <SourceTag source={method.source} />
           <ul class="used">
             {method.proofs.map((proof) => (
               <li>{proof.label}</li>
@@ -29,6 +31,8 @@ const pipeline = model.methods.map((method) => ({
 </section>
 
 <style>
+  /* The palette scrolls to a method; the sticky bar must not cover it. */
+  .pipe > li { scroll-margin-top: calc(var(--bar-h, 0px) + 16px); }
   .pipe { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: relative; }
   .pipe::before { content: ""; position: absolute; left: 0; right: 0; top: 19px; border-top: 1.5px solid var(--s-line); }
   .pipe > li { position: relative; padding: 0 14px 0 0; min-width: 0; display: grid; gap: 8px; align-content: start; }

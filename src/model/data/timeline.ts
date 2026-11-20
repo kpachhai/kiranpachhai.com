@@ -15,7 +15,7 @@ export const timeline: TimelineEntry[] = [
   },
   { kind: 'role', title: 'DevOps Engineer / Site Reliability Engineer', years: '2016-2018', source: LINKEDIN },
   { kind: 'role', title: 'Software Engineer / Rotation Associate', years: '2014-2016', source: LINKEDIN },
-  { kind: 'role', title: 'Student software and IT roles', years: '2010-2014', source: LINKEDIN },
+  { kind: 'role', title: 'Student software and IT roles', years: '2011-2014', source: LINKEDIN },
   { kind: 'education', title: 'B.S. Computer Science and Math, University of Colorado Boulder', years: '2010-2014', source: LINKEDIN },
   {
     kind: 'education',

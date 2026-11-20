@@ -1,0 +1,44 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  "A dApp sends a Hedera transaction to MetaMask. Before the signer approves it, MetaMask asks the SignScope Snap for an insight. The Snap resolves accounts to Hedera account IDs through the mirror node, decodes the call with a verified ABI from Sourcify, checks the user's allow list, ban list and HBAR warning amount, and shows the result on the confirmation screen."
+---
+
+<Diagram slug="signscope-snap" label={LABEL} wideHeight={178} narrowHeight={218}>
+  <Fragment slot="wide">
+    <Box i={0} x={4} y={72} w={64} h={36} label="dApp" />
+    <Box i={1} x={92} y={72} w={96} h={36} label="MetaMask" sub="confirmation" />
+    <Box i={2} x={214} y={72} w={142} h={36} label="SignScope Snap" sub="transaction insight" em />
+    <Box i={3} x={150} y={8} w={98} h={36} label="Mirror node" sub="account IDs" />
+    <Box i={4} x={258} y={8} w={98} h={36} label="Sourcify" sub="verified ABI" />
+    <Box i={5} x={258} y={136} w={98} h={36} label="Preferences" sub="allow, ban, HBAR" />
+    <Box i={6} x={92} y={136} w={96} h={36} label="Signer" sub="reads, then signs" />
+    <Link i={7} d="M68 90H90" />
+    <text class="sm el" style="--i:7" x="79" y="84">tx</text>
+    <Link i={8} d="M188 84H212" />
+    <Link i={9} d="M214 98H190" alt acc />
+    <Link i={10} d="M230 44V70" />
+    <Link i={11} d="M307 44V70" />
+    <Link i={12} d="M307 136V110" />
+    <Link i={13} d="M140 108V134" />
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={100} h={34} label="dApp" />
+    <Box i={1} x={124} y={8} w={108} h={34} label="MetaMask" sub="confirmation" />
+    <Box i={2} x={8} y={64} w={224} h={34} label="SignScope Snap" sub="transaction insight" em />
+    <Box i={3} x={8} y={120} w={108} h={34} label="Mirror node" sub="account IDs" />
+    <Box i={4} x={124} y={120} w={108} h={34} label="Sourcify" sub="verified ABI" />
+    <Box i={5} x={8} y={176} w={108} h={34} label="Preferences" sub="allow, ban, HBAR" />
+    <Box i={6} x={124} y={176} w={108} h={34} label="Signer" sub="reads, then signs" />
+    <Link i={7} d="M108 25H122" />
+    <Link i={8} d="M164 42V62" />
+    <Link i={9} d="M192 64V44" alt acc />
+    <Link i={10} d="M62 120V100" />
+    <Link i={11} d="M178 120V100" />
+    <Link i={12} d="M8 193H3V81H6" />
+    <Link i={13} d="M232 25H237V193H234" />
+  </Fragment>
+</Diagram>

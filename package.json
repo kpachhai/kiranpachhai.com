@@ -16,25 +16,40 @@
     "gate:copy": "node scripts/gates/copy-scan.ts dist",
     "data": "node --import ./scripts/gates/ts-resolve.mjs scripts/data/fetch-github.ts",
     "gate:provenance": "node --import ./scripts/gates/ts-resolve.mjs scripts/gates/provenance.ts",
-    "gates": "npm run build && npm test"
+    "gates": "node --import ./scripts/gates/ts-resolve.mjs scripts/gates/run-all.ts",
+    "gate:budget": "node --import ./scripts/gates/ts-resolve.mjs scripts/gates/budget.ts dist",
+    "gate:a11y": "playwright test --config playwright.gates.config.ts",
+    "gate:links": "node --import ./scripts/gates/ts-resolve.mjs scripts/gates/links.ts dist",
+    "gate:lighthouse": "lhci autorun"
   },
   "dependencies": {
-    "astro": "7.4.5",
+    "astro": "7.4.13",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@astrojs/sitemap": "3.7.4",
+    "@axe-core/playwright": "4.14.0",
     "@fontsource-variable/bricolage-grotesque": "5.3.0",
     "@fontsource-variable/martian-mono": "5.3.0",
     "@fontsource-variable/newsreader": "5.3.0",
     "@fontsource/bricolage-grotesque": "5.3.0",
     "@fontsource/martian-mono": "5.3.0",
     "@fontsource/newsreader": "5.3.0",
+    "@lhci/cli": "0.16.0",
     "@playwright/test": "1.63.0",
     "@resvg/resvg-js": "2.6.2",
     "@types/node": "22.20.5",
+    "linkinator": "8.1.0",
     "satori": "0.63.2",
     "typescript": "5.9.3",
-    "vitest": "5.1.1"
+    "vitest": "5.1.1",
+    "yaml": "2.9.1"
+  },
+  "overrides": {
+    "fflate": "0.7.5",
+    "basic-ftp": "6.2.6",
+    "linkinator": {
+      "glob": "14.0.4"
+    }
   }
 }

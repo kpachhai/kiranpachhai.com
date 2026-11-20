@@ -1,0 +1,41 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  'A chat client or a read-only MCP client asks the agent. The agent reads an index of Hedera and Hiero Improvement Proposals and a map from each proposal to the pull requests that implement it across Hiero repos. Owner actions wait at an approval gate, the guardrail config is anchored on HCS, and an eval harness checks the agent.'
+---
+
+<Diagram slug="hip-explorer-agent" label={LABEL} wideHeight={176} narrowHeight={274}>
+  <Fragment slot="wide">
+    <Box i={0} x={4} y={70} w={100} h={36} label="Client" sub="chat, read-only MCP" />
+    <Box i={1} x={122} y={70} w={62} h={36} label="Agent" em />
+    <Box i={2} x={206} y={8} w={150} h={36} label="Proposal index" sub="Hedera and Hiero" />
+    <Box i={3} x={206} y={70} w={150} h={36} label="PR map" sub="proposal to implementing PRs" />
+    <Box i={4} x={4} y={132} w={96} h={36} label="Eval harness" />
+    <Box i={5} x={116} y={132} w={84} h={36} label="Guardrails" sub="config on HCS" />
+    <Box i={6} x={214} y={132} w={142} h={36} label="Approval gate" sub="owner actions" />
+    <Link i={7} d="M104 88H120" />
+    <Link i={8} d="M184 80H194V26H204" />
+    <Link i={9} d="M184 88H204" />
+    <Link i={10} d="M166 106V122H285V130" acc />
+    <Link i={11} d="M200 150H212" alt />
+    <Link i={12} d="M52 132V120H140V108" alt />
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={224} h={34} label="Client" sub="chat or read-only MCP" />
+    <Box i={1} x={64} y={64} w={112} h={34} label="Agent" em />
+    <Box i={2} x={8} y={120} w={108} h={34} label="Proposal index" sub="Hedera and Hiero" />
+    <Box i={3} x={124} y={120} w={108} h={34} label="PR map" sub="proposal to PRs" />
+    <Box i={4} x={8} y={176} w={108} h={34} label="Guardrails" sub="config on HCS" />
+    <Box i={5} x={124} y={176} w={108} h={34} label="Approval gate" sub="owner actions" />
+    <Box i={6} x={8} y={232} w={224} h={34} label="Eval harness" />
+    <Link i={7} d="M120 42V62" />
+    <Link i={8} d="M90 98V118" />
+    <Link i={9} d="M150 98V118" />
+    <Link i={10} d="M176 81H237V193H234" acc />
+    <Link i={11} d="M116 193H122" alt />
+    <Link i={12} d="M8 249H3V81H62" alt />
+  </Fragment>
+</Diagram>

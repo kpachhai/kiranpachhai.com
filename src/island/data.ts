@@ -1,13 +1,15 @@
 // The slice of the content model the island needs, serialised once into the page by Stage.astro.
 // Only types cross from src/model, so zod and the full model never reach the browser bundle.
 import { STATUS_LABELS } from '../model/labels'
-import type { DomainId, MethodId, Model, ModeId, Role } from '../model/schema'
+import type { DomainId, HatId, MethodId, Model, ModeId, Source } from '../model/schema'
+import type { SourceLabel } from '../lib/provenance'
+import type { UpstreamRow } from '../lib/upstream'
 
 export interface IslandUpstream {
   label: string
   href: string
-  status: string
-  statusLabel: string
+  statuses: { status: string; label: string }[]
+  links: { href: string; note: string }[]
 }
 
 export interface IslandDomain {
@@ -24,29 +26,43 @@ export interface IslandProof {
   domainId: DomainId
   methods: MethodId[]
   modes: ModeId[]
+  source: SourceLabel
 }
 
 export interface IslandData {
   domains: IslandDomain[]
   proofs: IslandProof[]
   methods: { id: MethodId; name: string }[]
-  materials: { id: string; name: string; band: string; usedIn: string[] }[]
+  materials: { id: string; name: string; band: string; usedIn: string[]; source: SourceLabel }[]
   modes: { id: ModeId; name: string }[]
   range: { domainId: DomainId; mode: ModeId; proofIds: string[] }[]
-  // Titles only: the hero's role cycle needs nothing else, and titles carry no employer.
-  roles: Pick<Role, 'title'>[]
+  // Short titles only: the hero's role cycle needs nothing else, and titles carry no employer.
+  roles: { title: string }[]
+  // The journey's roles with the hats worn in each, for the Range lens roles x hats view.
+  career: { id: string; title: string; years: string; hats: HatId[] }[]
+  hats: { id: HatId; name: string }[]
 }
 
 export const DATA_ELEMENT_ID = 'island-data'
 
-export function buildIslandData(model: Model): IslandData {
+// labelOf turns a model source into its visible label at build time (src/lib/provenance.ts); it is
+// passed in so the label code, which reads the copy rules, never enters the browser bundle.
+// upstream is the site's one upstream list (src/lib/site.ts), so the drawer shows the ledger's rows.
+export function buildIslandData(model: Model, labelOf: (source: Source) => SourceLabel, upstream: UpstreamRow[]): IslandData {
   return {
-    domains: model.domains.map(({ id, name, upstream }) => ({
+    domains: model.domains.map(({ id, name }) => ({
       id,
       name,
-      upstream: upstream.map(({ label, href, status }) => ({ label, href, status, statusLabel: STATUS_LABELS[status] })),
+      upstream: upstream
+        .filter((row) => row.domainId === id)
+        .map(({ label, href, statuses, links }) => ({
+          label,
+          href,
+          statuses: statuses.map((status) => ({ status, label: STATUS_LABELS[status] })),
+          links: links.map(({ href: linkHref, note }) => ({ href: linkHref, note })),
+        })),
     })),
-    proofs: model.proofs.map(({ id, label, detail, href, domainId, methods }) => ({
+    proofs: model.proofs.map(({ id, label, detail, href, domainId, methods, source }) => ({
       id,
       label,
       detail,
@@ -54,12 +70,15 @@ export function buildIslandData(model: Model): IslandData {
       domainId,
       methods,
       modes: model.range.filter((cell) => cell.proofIds.includes(id)).map((cell) => cell.mode),
+      source: labelOf(source),
     })),
     methods: model.methods.map(({ id, name }) => ({ id, name })),
-    materials: model.materials.map(({ id, name, band, usedIn }) => ({ id, name, band, usedIn })),
+    materials: model.materials.map(({ id, name, band, usedIn, source }) => ({ id, name, band, usedIn, source: labelOf(source) })),
     modes: model.modes.map(({ id, name }) => ({ id, name })),
     range: model.range.map(({ domainId, mode, proofIds }) => ({ domainId, mode, proofIds })),
-    roles: model.roles.map(({ title }) => ({ title })),
+    roles: model.roles.flatMap(({ cycleTitle }) => (cycleTitle ? [{ title: cycleTitle }] : [])),
+    career: model.roles.map(({ id, title, years, hats }) => ({ id, title, years, hats })),
+    hats: model.hats.map(({ id, name }) => ({ id, name })),
   }
 }
 

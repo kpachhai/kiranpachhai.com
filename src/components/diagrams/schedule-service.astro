@@ -1,0 +1,45 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  'A contract asks the Schedule Service system contract at 0x16b to schedule a future call, and the network itself makes that call later. Before it schedules, the rebalancer checks hasScheduleCapacity for that second; when the second is full it backs off with jitter from the PRNG system contract and tries again.'
+---
+
+<Diagram slug="schedule-service" label={LABEL} wideHeight={182} narrowHeight={244}>
+  <Fragment slot="wide">
+    <Box i={0} x={4} y={14} w={96} h={36} label="Contract" sub="alarm, rebalancer" />
+    <Box i={1} x={122} y={14} w={104} h={36} label="Capacity" sub="hasScheduleCapacity" />
+    <Box i={2} x={248} y={14} w={108} h={36} label="Schedule Service" sub="contract at 0x16b" em />
+    <Box i={3} x={122} y={112} w={104} h={36} label="Back off" sub="PRNG jitter" />
+    <Box i={4} x={248} y={112} w={108} h={36} label="Network" sub="executes later" />
+    <Link i={5} d="M100 32H120" />
+    <Link i={6} d="M226 32H246" />
+    <text class="sm el" style="--i:6" x="236" y="26">yes</text>
+    <Link i={7} d="M190 50V110" />
+    <text class="sm el lft" style="--i:7" x="194" y="84">full</text>
+    <Link i={8} d="M158 112V52" alt />
+    <text class="sm el rgt" style="--i:8" x="154" y="84">retry</text>
+    <Link i={9} d="M302 50V110" />
+    <Link i={10} d="M302 148V162H52V52" acc />
+    <text class="sm el" style="--i:10" x="180" y="176">the network calls back; the rebalancer reschedules</text>
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={224} h={34} label="Contract" sub="alarm, rebalancer" />
+    <Box i={1} x={8} y={64} w={224} h={34} label="Capacity" sub="hasScheduleCapacity" />
+    <Box i={2} x={8} y={120} w={108} h={34} label="Back off" sub="PRNG jitter" />
+    <Box i={3} x={124} y={120} w={108} h={34} label="Schedule Service" sub="contract at 0x16b" em />
+    <Box i={4} x={124} y={176} w={108} h={34} label="Network" sub="executes later" />
+    <Link i={5} d="M120 42V62" />
+    <Link i={6} d="M86 98V118" />
+    <text class="sm el lft" style="--i:6" x="90" y="112">full</text>
+    <Link i={7} d="M30 120V100" alt />
+    <text class="sm el lft" style="--i:7" x="34" y="112">retry</text>
+    <Link i={8} d="M178 98V118" />
+    <text class="sm el lft" style="--i:8" x="182" y="112">yes</text>
+    <Link i={9} d="M178 154V174" />
+    <Link i={10} d="M178 210V222H3V25H6" acc />
+    <text class="sm el" style="--i:10" x="120" y="236">the network calls back</text>
+  </Fragment>
+</Diagram>

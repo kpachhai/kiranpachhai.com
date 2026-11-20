@@ -3,23 +3,25 @@
 // with it, stage.ts turns that list into the lens nodes.
 import { initBom } from './bom'
 import { readIslandData } from './data'
+import { isTyping } from './dom'
 import { initDrawer, isDrawerOpen, onDrawerChange } from './drawer'
 import { initIntro } from './intro'
+import { initJourney } from './journey'
 import { prefersReducedMotion } from './motion'
 import { initPalette, isPaletteOpen } from './palette'
+import { initRangeView } from './rangeView'
 import { ROLES_KEY, runRoleCycle } from './roles'
 import { initStage } from './stage'
+import './settings'
 import {
   LENSES,
-  THEMES,
-  currentTheme,
+  lensForKey,
   lensFromHash,
   markSeenThisSession,
   onLensChange,
-  onThemeChange,
+  rememberLens,
   seenThisSession,
   setLens,
-  setTheme,
   shortcutsEnabled,
   startLens,
 } from './state'
@@ -30,18 +32,12 @@ function requireElement(id: string): HTMLElement {
   return found
 }
 
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
-}
-
 function bindLensKeys(): void {
   document.addEventListener('keydown', (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return
     if (!shortcutsEnabled() || isPaletteOpen() || isDrawerOpen()) return
-    const position = Number(event.key) - 1
-    const lens = LENSES[position]
-    if (Number.isInteger(position) && lens) void setLens(lens)
+    const lens = lensForKey(event)
+    if (lens) void setLens(lens)
   })
   for (const button of document.querySelectorAll<HTMLElement>('[data-lens-button]')) {
     button.addEventListener('click', () => void setLens(button.dataset.lensButton as (typeof LENSES)[number]))
@@ -50,16 +46,6 @@ function bindLensKeys(): void {
     const lens = lensFromHash(window.location.hash)
     if (lens) void setLens(lens)
   })
-}
-
-function bindThemeControl(): void {
-  const control = requireElement('theme-toggle')
-  const label = () => {
-    control.textContent = `Theme: ${currentTheme()}`
-  }
-  control.addEventListener('click', () => setTheme(THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length]))
-  onThemeChange(label)
-  label()
 }
 
 // The side drawer opens below the sticky bar, so the bar's live height feeds --bar-h.
@@ -71,12 +57,19 @@ function measureBar(): void {
   new ResizeObserver(write).observe(bar)
 }
 
+// The live region names a lens switch by its display name, from the first switch the visitor
+// makes (the lens a visit starts on is not news). Opening the drawer moves focus to its heading,
+// which is announced already; only a step to the next or previous area is announced here.
+let announceLenses = false
+
 function announce(live: HTMLElement): void {
   onLensChange((lens) => {
-    live.textContent = `Lens: ${lens}`
+    if (announceLenses) live.textContent = `Lens: ${lens[0].toUpperCase()}${lens.slice(1)}`
   })
+  let open = false
   onDrawerChange((target) => {
-    if (target) live.textContent = `Showing ${requireElement('drawer-title').textContent ?? ''}`
+    if (target && open) live.textContent = `Showing ${requireElement('drawer-title').textContent ?? ''}`
+    open = target !== null
   })
 }
 
@@ -92,16 +85,19 @@ function main(): void {
   const stage = requireElement('stage')
   const data = readIslandData()
   initStage(stage, data)
+  initRangeView(stage, requireElement('island-live'))
   initDrawer(data)
   initPalette(data)
   initBom()
   bindLensKeys()
-  bindThemeControl()
   measureBar()
   announce(requireElement('island-live'))
   cycleRoles(data.roles)
+  onLensChange(rememberLens)
+  initJourney()
   // A rejection stays unhandled on purpose: it surfaces in the console instead of a silent half-island.
   void startLens(stage).then(() => {
+    announceLenses = true
     document.documentElement.dataset.island = 'ready'
     initIntro()
   })

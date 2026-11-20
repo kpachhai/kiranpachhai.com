@@ -1,5 +1,5 @@
 import type { Talk } from '../schema'
-import { LINKEDIN, LINKEDIN_PROFILE, OWNER, url } from './sources'
+import { LINKEDIN, OWNER, url } from './sources'
 
 const GH = 'https://github.com'
 
@@ -18,7 +18,6 @@ export const talks: Talk[] = [
     title: 'Deploying Smart Contracts with Native On-Chain Automation',
     kind: 'workshop',
     detail: 'LinkedIn Live workshop',
-    href: LINKEDIN_PROFILE,
     source: LINKEDIN,
   },
   {
@@ -26,7 +25,6 @@ export const talks: Talk[] = [
     title: 'Cross-ledger early adopter session',
     kind: 'session',
     detail: 'Technical session explaining CLPR',
-    href: LINKEDIN_PROFILE,
     source: LINKEDIN,
   },
   {
@@ -41,7 +39,7 @@ export const talks: Talk[] = [
     id: 'hedera-docs-tutorials',
     title: 'Hedera docs tutorials',
     kind: 'tutorials',
-    detail: 'Fork testing, parts 1 and 2, and schedule service',
+    detail: 'Fork testing, parts 1 and 2',
     href: `${GH}/hashgraph/hedera-docs/pull/375`,
     source: url(`${GH}/hashgraph/hedera-docs/pull/375`),
   },

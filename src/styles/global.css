@@ -1,11 +1,14 @@
 @import './tokens.css';
 
+/* A static instance at 82% width (weight still variable): the condensed cut the headlines ask for
+   with font-stretch 80-82%. It is the only Bricolage face, so all display text is condensed. */
 @font-face {
   font-family: "Bricolage Grotesque";
   font-style: normal;
+  font-stretch: 82%;
   font-weight: 200 800;
   font-display: swap;
-  src: url('/fonts/bricolage-grotesque-latin-wght-normal.woff2') format('woff2-variations');
+  src: url('/fonts/bricolage-grotesque-latin-wght-wdth82-normal.woff2') format('woff2-variations');
 }
 
 @font-face {
@@ -16,12 +19,46 @@
   src: url('/fonts/newsreader-latin-wght-normal.woff2') format('woff2-variations');
 }
 
+/* The real italic, subset to the characters of the hero thesis, the one italic line on the site.
+   optional: if it is not ready for first paint it is skipped for that visit, so it never shifts layout. */
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: optional;
+  src: url('/fonts/newsreader-thesis-wght-italic.woff2') format('woff2-variations');
+  unicode-range: U+0020, U+002C, U+002E, U+0049, U+0053, U+0061-0066, U+0068-0069, U+006C-0070, U+0072-0075, U+0077, U+0079;
+}
+
 @font-face {
   font-family: "Martian Mono";
   font-style: normal;
   font-weight: 100 800;
   font-display: swap;
   src: url('/fonts/martian-mono-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+/* Local monos scaled to Martian Mono's metrics (0.7 em advance, ascent 1.0, descent 0.2), so text
+   set before the web font arrives already takes its final width and the swap moves nothing.
+   size-adjust is 0.7 em over the local font's advance; the overrides are divided by size-adjust
+   because size-adjust scales them too. Menlo, DejaVu Sans Mono and Liberation Mono advance about
+   0.602 em; Consolas advances 0.55 em, so it gets its own face. */
+@font-face {
+  font-family: "Martian Mono Fallback";
+  src: local("Menlo Regular"), local("Menlo-Regular"), local("DejaVu Sans Mono"), local("DejaVuSansMono"), local("Liberation Mono"), local("LiberationMono");
+  size-adjust: 116.27%;
+  ascent-override: 86.01%;
+  descent-override: 17.20%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Martian Mono Fallback Consolas";
+  src: local("Consolas");
+  size-adjust: 127.32%;
+  ascent-override: 78.54%;
+  descent-override: 15.71%;
+  line-gap-override: 0%;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

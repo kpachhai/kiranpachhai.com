@@ -1,0 +1,37 @@
+---
+import Diagram from './Diagram.astro'
+import Box from './Box.astro'
+import Link from './Link.astro'
+
+const LABEL =
+  'A white-label app for on-chain finance carries a team brand. Every integration sits behind a swappable adapter. By default each adapter reads simulated data from a seeded engine, so the template runs without a backend; a fork swaps the adapters for its own integrations.'
+---
+
+<Diagram slug="onchain-finance-template" label={LABEL} wideHeight={170} narrowHeight={218}>
+  <Fragment slot="wide">
+    <Box i={0} x={4} y={14} w={100} h={34} label="Brand" sub="white-label" />
+    <Box i={1} x={4} y={68} w={100} h={36} label="App" sub="on-chain finance" em />
+    <Box i={2} x={130} y={68} w={100} h={36} label="Adapters" sub="swappable" />
+    <Box i={3} x={256} y={20} w={100} h={36} label="Seeded engine" sub="simulated data" />
+    <Box i={4} x={256} y={116} w={100} h={36} label="Integrations" sub="a fork's own" />
+    <Link i={5} d="M54 48V66" alt />
+    <Link i={6} d="M104 86H128" />
+    <Link i={7} d="M230 80H243V38H254" acc />
+    <text class="sm el rgt" style="--i:7" x="239" y="52">default</text>
+    <Link i={8} d="M230 92H243V134H254" alt />
+    <text class="sm el rgt" style="--i:8" x="239" y="128">fork</text>
+  </Fragment>
+  <Fragment slot="narrow">
+    <Box i={0} x={8} y={8} w={224} h={34} label="Brand" sub="white-label" />
+    <Box i={1} x={8} y={64} w={224} h={34} label="App" sub="on-chain finance" em />
+    <Box i={2} x={8} y={120} w={224} h={34} label="Adapters" sub="swappable" />
+    <Box i={3} x={8} y={176} w={108} h={34} label="Seeded engine" sub="simulated data" />
+    <Box i={4} x={124} y={176} w={108} h={34} label="Integrations" sub="a fork's own" />
+    <Link i={5} d="M120 42V62" alt />
+    <Link i={6} d="M120 98V118" />
+    <Link i={7} d="M62 154V174" acc />
+    <text class="sm el lft" style="--i:7" x="66" y="168">default</text>
+    <Link i={8} d="M178 154V174" alt />
+    <text class="sm el lft" style="--i:8" x="182" y="168">fork</text>
+  </Fragment>
+</Diagram>

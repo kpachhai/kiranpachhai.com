@@ -1,0 +1,199 @@
+---
+// The journey, 2011 to now: one stop per role, each leading with the skills it added, then the work.
+// The toolkit beside it holds every skill so far and only grows. Without JavaScript every stop and
+// the complete toolkit are plain content; src/island/journey.ts adds the fill-as-you-scroll motion.
+import { model, type SkillSet } from '../../model'
+import { proofById } from '../../lib/site'
+import SourceTag from '../SourceTag.astro'
+
+const SETS: { id: SkillSet; label: string }[] = [
+  { id: 'work', label: 'Kinds of work' },
+  { id: 'language', label: 'Languages' },
+  { id: 'stack', label: 'Frameworks and stacks' },
+  { id: 'tool', label: 'Platforms and tools' },
+]
+
+const skillById = new Map(model.skills.map((skill) => [skill.id, skill]))
+const hatName = new Map(model.hats.map((hat) => [hat.id, hat.name]))
+
+function skillOf(id: string) {
+  const skill = skillById.get(id)
+  if (!skill) throw new Error(`journey: unknown skill ${id}`)
+  return skill
+}
+
+const stops = model.roles.map((role) => ({
+  ...role,
+  added: role.skillsAdded.map(skillOf),
+  proofs: role.proofIds.map(proofById),
+}))
+
+// Oldest first within each set; ties keep model order.
+const toolkit = SETS.map((set) => ({
+  ...set,
+  skills: model.skills.filter((skill) => skill.set === set.id).sort((a, b) => a.firstYear - b.firstYear),
+}))
+const total = model.skills.length
+---
+
+<section class="sec wrap" id="journey" aria-labelledby="journey-h">
+  <div class="sec-head"><h2 id="journey-h">Journey</h2><span class="eyebrow">2011 to now, one stop per role</span></div>
+  <p class="lede">Each stop lists the skills it added, then the work behind them. Every skill is still in use, so the toolkit only grows.</p>
+  <div class="jy" data-journey>
+    <aside class="toolkit" aria-labelledby="tk-h">
+      <div class="tk-top">
+        <h3 id="tk-h">Toolkit</h3>
+        <span class="tk-count" data-tk-count>{total} skills</span>
+        <button class="tool tk-toggle js-only" type="button" aria-expanded="false" aria-controls="tk-body" aria-label="Show toolkit">Show</button>
+      </div>
+      <div class="tk-body" id="tk-body" role="region" aria-label="Toolkit skills" tabindex="0">
+        {
+          toolkit.map((set) => (
+            <section class="tk-set" aria-labelledby={`tk-${set.id}`}>
+              <h4 id={`tk-${set.id}`}>{set.label}</h4>
+              <ul>
+                {set.skills.map((skill) => (
+                  <li data-skill={skill.id} data-claim-id={`skill-${skill.id}`}>
+                    <span class="tk-name">{skill.name}</span>
+                    <span class="tk-since">since {skill.firstYear}</span>
+                    <SourceTag source={skill.source} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
+        }
+      </div>
+    </aside>
+    <ol class="stops">
+      {
+        stops.map((stop) => (
+          <li class="stop" id={`stop-${stop.id}`} data-stop={stop.id}>
+            <div class="stop-head" data-claim-id={`role-${stop.id}`}>
+              <p class="stop-years">{stop.years}</p>
+              <h3 class="stop-title">{stop.title}</h3>
+              <ul class="hats" aria-label="Hats worn">
+                {stop.hats.map((hat) => (
+                  <li>{hatName.get(hat)}</li>
+                ))}
+              </ul>
+              <SourceTag source={stop.source} />
+            </div>
+            {stop.added.length > 0 && (
+              <div class="added">
+                <h4 class="eyebrow">Skills added</h4>
+                <ul class="chips">
+                  {stop.added.map((skill) => (
+                    <li data-chip={skill.id}>{skill.name}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div class="work" data-claim-id={`work-${stop.id}`}>
+              <h4 class="eyebrow">The work</h4>
+              <ul>
+                {stop.work.items.map((item) => (
+                  <li>{item}</li>
+                ))}
+              </ul>
+              <SourceTag source={stop.work.source} />
+            </div>
+            {stop.figures.length > 0 && (
+              <ul class="figs" aria-label="Figures">
+                {stop.figures.map((figure, position) => (
+                  <li data-claim-id={`figure-${stop.id}-${position}`}>
+                    {figure.text}
+                    <SourceTag source={figure.source} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {stop.proofs.length + stop.projects.length > 0 && (
+              <div class="projects">
+                <h4 class="eyebrow">Projects</h4>
+                <ul>
+                  {stop.proofs.map((proof) => (
+                    <li data-claim-id={`journey-proof-${proof.id}`}>
+                      {proof.href ? <a href={proof.href}>{proof.label}</a> : <span class="pl">{proof.label}</span>}
+                      <span class="pd">{proof.detail}</span>
+                      <SourceTag source={proof.source} />
+                    </li>
+                  ))}
+                  {stop.projects.map((project) => (
+                    <li data-claim-id={`project-${project.id}`}>
+                      {project.href ? <a href={project.href}>{project.label}</a> : <span class="pl">{project.label}</span>}
+                      <span class="pd">{project.detail}</span>
+                      <SourceTag source={project.source} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .jy { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+  .stops { grid-column: 1; grid-row: 1; list-style: none; margin: 0; padding: 0; position: relative; }
+  .stops::before { content: ""; position: absolute; left: 7px; top: 10px; bottom: 24px; border-left: 1.5px solid var(--rule); }
+  .stop { position: relative; display: grid; gap: 14px; padding: 0 0 40px 36px; scroll-margin-top: 96px; }
+  .stop::before { content: ""; position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--accent); background: var(--paper); }
+  .stop-years { margin: 0 0 4px; font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.04em; color: var(--accent); }
+  .stop-title { font-size: clamp(1.35rem, 2.6vw, 1.75rem); font-weight: 720; font-stretch: 82%; line-height: 1.1; }
+  .hats, .chips, .figs, .projects ul { list-style: none; margin: 0; padding: 0; }
+  .hats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .hats li { font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); padding: 2px 8px; }
+  .stop h4 { margin: 0 0 6px; font-weight: 500; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips li { font-family: var(--mono); font-size: 0.75rem; padding: 3px 9px; border: 1px solid var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .work ul { margin: 0; padding-left: 18px; font-size: 1rem; line-height: 1.5; display: grid; gap: 4px; }
+  .figs { display: grid; gap: 6px; }
+  .figs li { font-family: var(--display); font-stretch: 82%; font-weight: 650; font-size: 1.05rem; line-height: 1.3; border-left: 3px solid var(--accent); padding: 2px 0 2px 12px; }
+  .projects ul { display: grid; gap: 8px; font-size: 0.95rem; line-height: 1.4; }
+  .projects li { display: grid; gap: 1px; }
+  .projects a, .pl { font-weight: 600; }
+  .pd { color: var(--muted); }
+
+  .toolkit { grid-column: 2; grid-row: 1; position: sticky; top: calc(var(--bar-h, 0px) + 16px); max-height: calc(100vh - var(--bar-h, 0px) - 32px); overflow-y: auto;
+    border: 1px solid var(--ink); background: var(--panel); padding: 14px 16px 16px; }
+  .tk-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; border-bottom: 1px solid var(--rule); padding-bottom: 8px; margin-bottom: 12px; }
+  .tk-top h3 { font-size: 1.375rem; font-weight: 720; font-stretch: 82%; }
+  .tk-count { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); margin-right: auto; }
+  .tk-toggle { display: none; }
+  .tk-set + .tk-set { margin-top: 10px; }
+  .tk-set h4 { margin: 0 0 5px; font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .tk-set ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+  .tk-set li { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-family: var(--mono); font-size: 0.71875rem; line-height: 1.35; padding: 1px 6px; border: 1px solid var(--control-line); background: var(--paper); }
+  .tk-since { font-size: 0.6875rem; color: var(--muted); }
+  /* An empty slot stays legible: muted text at full opacity behind a dashed border. */
+  .tk-set li[data-state="empty"] { color: var(--muted); border-style: dashed; background: transparent; }
+
+  @media (max-width: 1023px) {
+    .jy { grid-template-columns: minmax(0, 1fr); }
+    .stops { grid-row: 2; }
+    /* On phones and tablets the toolkit is a sticky summary under the bar that opens on demand. */
+    .toolkit { grid-column: 1; grid-row: 1; top: var(--bar-h, 0px); z-index: 5; max-height: none; overflow: visible; margin-bottom: 24px; padding: 10px 14px; }
+    .tk-top { align-items: center; border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+    .tk-top h3 { font-size: 1.125rem; }
+    .tk-toggle { display: inline-block; }
+    .tk-body { margin-top: 10px; max-height: 55vh; overflow-y: auto; }
+    /* With JavaScript the body starts collapsed before first paint; the toggle sets data-open. */
+    :global(html.js) .tk-body:not([data-open]) { display: none; }
+    :global(html:not(.js)) .toolkit { position: static; }
+    :global(html:not(.js)) .tk-body { max-height: none; }
+  }
+  @media (max-width: 719px) {
+    .jy { gap: 0; }
+    .stop { padding-left: 30px; }
+  }
+</style>
+
+<style is:global>
+  /* A chip on its way from a stop to the toolkit; aria-hidden, removed when it lands. */
+  .jy-fly { position: fixed; z-index: 35; pointer-events: none; white-space: nowrap; font-family: var(--mono); font-size: 0.75rem; padding: 3px 9px;
+    border: 1px solid var(--accent); color: var(--accent); background: var(--paper); }
+</style>

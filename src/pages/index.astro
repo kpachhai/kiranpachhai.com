@@ -4,6 +4,7 @@ import HeroStatic from '../components/hero/HeroStatic.astro'
 import Stage from '../components/hero/Stage.astro'
 import SelectedWork from '../components/sections/SelectedWork.astro'
 import HowIWork from '../components/sections/HowIWork.astro'
+import Journey from '../components/sections/Journey.astro'
 import RangeMatrix from '../components/sections/RangeMatrix.astro'
 import Timeline from '../components/sections/Timeline.astro'
 import Upstream from '../components/sections/Upstream.astro'
@@ -13,11 +14,14 @@ import { PERSON, SITE_DESCRIPTION } from '../lib/site'
 ---
 
 <Base title={model.hero.name} description={SITE_DESCRIPTION} path="/" ogImage="/og/home.png" jsonLd={PERSON}>
+  <!-- The thesis line's italic, preloaded so it is ready for first paint (its face is font-display: optional). -->
+  <link slot="head" rel="preload" href="/fonts/newsreader-thesis-wght-italic.woff2" as="font" type="font/woff2" crossorigin />
   <Stage />
   <main>
     <HeroStatic />
     <SelectedWork />
     <HowIWork />
+    <Journey />
     <RangeMatrix />
     <Timeline />
     <Upstream />

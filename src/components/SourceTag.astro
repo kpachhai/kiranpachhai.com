@@ -1,0 +1,25 @@
+---
+// The source of one claim. Hidden until the provenance toggle is on; the claim element that
+// holds this tag carries data-claim-id.
+import type { Source } from '../model'
+import { sourceLabel } from '../lib/provenance'
+
+interface Props {
+  source: Source
+}
+
+const label = sourceLabel(Astro.props.source)
+---
+
+<span class="src-tag" data-claim-source data-source-kind={label.kind}>
+  {label.href ? <a href={label.href}>{label.text}</a> : label.text}
+</span>
+
+<style is:global>
+  .src-tag { display: none; }
+  html[data-provenance="on"] .src-tag {
+    display: block; margin-top: 4px; font-family: var(--mono); font-size: 0.65rem; font-weight: 400; font-stretch: normal;
+    letter-spacing: 0; text-transform: none; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere;
+  }
+  html[data-provenance="on"] .src-tag::before { content: "src "; color: var(--accent); }
+</style>

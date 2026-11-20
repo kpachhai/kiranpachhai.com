@@ -1,5 +1,5 @@
 import type { Domain, Proof } from '../schema'
-import { LINKEDIN, LINKEDIN_PROFILE, OWNER, url } from './sources'
+import { LINKEDIN, OWNER, url } from './sources'
 
 const GH = 'https://github.com'
 
@@ -11,6 +11,8 @@ function privateProof(proof: Omit<Proof, 'source' | 'private' | 'href'>): Proof 
   return { ...proof, source: OWNER, private: true }
 }
 
+// Career work sourced to LinkedIn. It links only to public work (a repo); never to the LinkedIn
+// profile, so an item with no other target shows as text and its source still says LinkedIn.
 function career(proof: Omit<Proof, 'source' | 'private'>): Proof {
   return { ...proof, source: LINKEDIN, private: false }
 }
@@ -63,7 +65,6 @@ export const proofs: Proof[] = [
     id: 'hedera-wallet-snap',
     label: 'Hedera Wallet Snap',
     detail: 'A MetaMask Snap for Hedera',
-    href: LINKEDIN_PROFILE,
     domainId: 'wallets',
     methods: [],
   }),
@@ -115,7 +116,7 @@ export const proofs: Proof[] = [
     label: 'The Plumbing of Money',
     detail: 'Course on how money moves and how it is being rebuilt: interactive widgets, Python exercises, post-build gates',
     domainId: 'explainers',
-    methods: ['A', 'B', 'E'],
+    methods: ['B', 'E'],
   }),
   privateProof({
     id: 'finance-101-talk',
@@ -135,7 +136,7 @@ export const proofs: Proof[] = [
   linked({
     id: 'hedera-docs-tutorials',
     label: 'Hedera docs tutorials',
-    detail: 'Fork testing tutorials, parts 1 and 2, and schedule service tutorials',
+    detail: 'Fork testing tutorials, parts 1 and 2',
     href: `${GH}/hashgraph/hedera-docs/pull/375`,
     domainId: 'explainers',
     methods: [],
@@ -196,7 +197,6 @@ export const proofs: Proof[] = [
     id: 'l1-vm',
     label: 'An L1 VM on Avalanche HyperSDK',
     detail: 'Validator node architecture, parallelized execution, APIs, staking and validator rewards',
-    href: LINKEDIN_PROFILE,
     domainId: 'chains',
     methods: [],
   }),
@@ -204,7 +204,6 @@ export const proofs: Proof[] = [
     id: 'storage-node',
     label: 'A decentralized storage node with a scripting mechanism',
     detail: 'Decentralized storage in Python with IPFS backup',
-    href: LINKEDIN_PROFILE,
     domainId: 'chains',
     methods: [],
   }),
@@ -212,7 +211,6 @@ export const proofs: Proof[] = [
     id: 'rsyslog-exporter',
     label: 'Rsyslog Exporter for Prometheus in Go',
     detail: 'Syslog metrics for Prometheus; introduced Go, Prometheus and Grafana to the team',
-    href: LINKEDIN_PROFILE,
     domainId: 'chains',
     methods: [],
   }),
@@ -223,87 +221,30 @@ export const domains: Domain[] = [
     id: 'protocol',
     name: 'Protocol and standards',
     source: OWNER,
-    upstream: [
-      {
-        label: 'JSON-RPC relay: tinybars to weibars in debug traces',
-        href: `${GH}/hiero-ledger/hiero-json-rpc-relay/pull/4764`,
-        status: 'merged',
-        domainId: 'protocol',
-      },
-      { label: 'HyperSDK design discussions', href: `${GH}/ava-labs/hypersdk`, status: 'discussion', domainId: 'protocol' },
-    ],
   },
   {
     id: 'wallets',
     name: 'Wallets and developer tooling',
     source: OWNER,
-    upstream: [
-      { label: 'A Snaps wallet repo: reviews', href: `${GH}/hashgraph/hedera-metamask-snaps`, status: 'review', domainId: 'wallets' },
-      { label: 'A Snaps wallet repo: audit fixes (2024)', href: `${GH}/hashgraph/hedera-metamask-snaps/pull/309`, status: 'merged', domainId: 'wallets' },
-      { label: 'A Snaps wallet repo: audit fix (2025)', href: `${GH}/hashgraph/hedera-metamask-snaps/pull/903`, status: 'merged', domainId: 'wallets' },
-      { label: 'Identify Snap repo: Hedera SDK integration', href: `${GH}/tuum-tech/identify/pull/2`, status: 'merged', domainId: 'wallets' },
-      { label: 'Identify Snap repo: EVM network support', href: `${GH}/tuum-tech/identify/pull/18`, status: 'merged', domainId: 'wallets' },
-      { label: 'Identify Snap repo: audit fixes', href: `${GH}/tuum-tech/identify/pull/73`, status: 'merged', domainId: 'wallets' },
-    ],
   },
   {
     id: 'agents',
     name: 'AI agents and harnesses',
     source: OWNER,
-    upstream: [
-      { label: 'Hedera skills: dev-intelligence plugin', href: `${GH}/hedera-dev/hedera-skills/pull/2`, status: 'merged', domainId: 'agents' },
-    ],
   },
   {
     id: 'explainers',
     name: 'Explainers and education',
     source: OWNER,
-    upstream: [
-      { label: 'Hedera docs: forking tutorials', href: `${GH}/hashgraph/hedera-docs/pull/375`, status: 'merged', domainId: 'explainers' },
-      {
-        label: 'Hedera docs: Foundry HTS fork testing tutorial, part 2',
-        href: `${GH}/hashgraph/hedera-docs/pull/492`,
-        status: 'merged',
-        domainId: 'explainers',
-      },
-      { label: 'Hedera docs: Schedule Service tutorials', href: `${GH}/hashgraph/hedera-docs/pull/333`, status: 'merged', domainId: 'explainers' },
-      {
-        label: 'Hedera code snippets: Schedule Service tutorials',
-        href: `${GH}/hedera-dev/hedera-code-snippets/pull/48`,
-        status: 'merged',
-        domainId: 'explainers',
-      },
-      {
-        label: 'Hedera code snippets: fork Hedera mainnet locally',
-        href: `${GH}/hedera-dev/hedera-code-snippets/pull/47`,
-        status: 'merged',
-        domainId: 'explainers',
-      },
-      { label: 'CLPR website: plumbing explainer built from source', href: `${GH}/danielmarv/clpr-website/pull/7`, status: 'merged', domainId: 'explainers' },
-      { label: 'CLPR website: claims checked against the spec', href: `${GH}/danielmarv/clpr-website/pull/10`, status: 'merged', domainId: 'explainers' },
-      { label: 'CLPR website: LFDT website requirements', href: `${GH}/danielmarv/clpr-website/pull/19`, status: 'merged', domainId: 'explainers' },
-      {
-        label: 'CLPR website: sync to the latest contracts, endpoint and governance',
-        href: `${GH}/LFDT-CLPR/clpr-website/pull/7`,
-        status: 'open',
-        domainId: 'explainers',
-      },
-    ],
   },
   {
     id: 'data',
     name: 'Data and analysis',
     source: OWNER,
-    upstream: [],
   },
   {
     id: 'chains',
     name: 'Chains and infrastructure',
     source: OWNER,
-    upstream: [
-      { label: 'An L1 SDK (2024)', href: `${GH}/Nuklai/nuklai-js-sdk`, status: 'commits', domainId: 'chains' },
-      { label: 'An L1 wallet (2024)', href: `${GH}/Nuklai/nuklai-wallet`, status: 'commits', domainId: 'chains' },
-      { label: 'redis_exporter latency stats (2017)', href: `${GH}/oliver006/redis_exporter/pull/87`, status: 'merged', domainId: 'chains' },
-    ],
   },
 ]

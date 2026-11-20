@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css'
 import Footer from '../components/sections/Footer.astro'
+import { model } from '../model'
 
 interface Props {
   title: string
@@ -23,13 +24,26 @@ const image = new URL(ogImage, Astro.site).href
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script is:inline>
-      // Before first paint: mark JS as present and apply a stored theme. Storage can throw.
+      // Before first paint: mark JS as present and apply a stored theme and provenance choice. Storage can throw.
+      // If a module script fails to load (blocked, offline), the page falls back to its no-JS view, so
+      // no control is left on screen without the code behind it.
       ;(function () {
         var root = document.documentElement
         root.classList.add('js')
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target
+            if (target && target.tagName === 'SCRIPT' && target.type === 'module') root.classList.remove('js')
+          },
+          true,
+        )
         try {
           var theme = window.localStorage.getItem('kp-theme')
           if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+          if (window.localStorage.getItem('kp-provenance') === 'on') root.setAttribute('data-provenance', 'on')
+          // The hero's role cycle plays once a session; after that the roles are listed as text.
+          if (window.sessionStorage.getItem('kp-roles-seen') === '1') root.setAttribute('data-roles-seen', '')
         } catch (error) {}
       })()
     </script>
@@ -41,17 +55,21 @@ const image = new URL(ogImage, Astro.site).href
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={image} />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={model.hero.name} />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={image} />
     {noindex && <meta name="robots" content="noindex" />}
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
     <link
       rel="preload"
-      href="/fonts/bricolage-grotesque-latin-wght-normal.woff2"
+      href="/fonts/bricolage-grotesque-latin-wght-wdth82-normal.woff2"
       as="font"
       type="font/woff2"
       crossorigin
     />
     <slot name="head" />
+    <script is:inline nomodule>document.documentElement.classList.remove('js')</script>
   </head>
   <body>
     <slot />

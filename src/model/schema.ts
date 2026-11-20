@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 export const DOMAIN_IDS = ['protocol', 'wallets', 'agents', 'explainers', 'data', 'chains'] as const
 export const METHOD_IDS = ['A', 'B', 'C', 'D', 'E'] as const
-export const MODE_IDS = ['build', 'architect', 'research', 'teach', 'operate'] as const
+export const MODE_IDS = ['build', 'architect', 'research', 'teach'] as const
+export const SKILL_SETS = ['work', 'language', 'stack', 'tool'] as const
+export const HAT_IDS = ['engineer', 'operator', 'devrel', 'educator', 'architect', 'product', 'protocol'] as const
 
 const httpsUrl = z.string().startsWith('https://')
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -11,6 +13,8 @@ const text = z.string().min(1)
 export const DomainIdSchema = z.enum(DOMAIN_IDS)
 export const MethodIdSchema = z.enum(METHOD_IDS)
 export const ModeIdSchema = z.enum(MODE_IDS)
+export const SkillSetSchema = z.enum(SKILL_SETS)
+export const HatIdSchema = z.enum(HAT_IDS)
 
 export const SourceSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('url'), url: httpsUrl }),
@@ -43,7 +47,6 @@ export const UpstreamSchema = z.strictObject({
 export const DomainSchema = z.strictObject({
   id: DomainIdSchema,
   name: text,
-  upstream: z.array(UpstreamSchema),
   source: SourceSchema,
 })
 
@@ -56,7 +59,7 @@ export const MethodSchema = z.strictObject({
 
 export const MaterialSchema = z.strictObject({
   id: text,
-  band: z.enum(['language', 'tool', 'discipline']),
+  band: z.enum(['language', 'stack', 'tool', 'discipline']),
   name: text,
   usedIn: z.array(text),
   source: SourceSchema,
@@ -70,9 +73,41 @@ export const RangeCellSchema = z.strictObject({
   proofIds: z.array(text),
 })
 
+export const SourcedTextSchema = z.strictObject({ text, source: SourceSchema })
+
+// A skill still in use, with the earliest year a source shows it. No self-ratings.
+export const SkillSchema = z.strictObject({
+  id: text,
+  name: text,
+  set: SkillSetSchema,
+  firstYear: z.number().int(),
+  evidence: z.strictObject({ roleIds: z.array(text).optional(), proofIds: z.array(text).optional() }),
+  source: SourceSchema,
+})
+
+export const HatSchema = z.strictObject({ id: HatIdSchema, name: text })
+
+// A project from the career that is not a proof on the map; linked only where the target is live.
+export const CareerProjectSchema = z.strictObject({
+  id: text,
+  label: text,
+  detail: text,
+  href: httpsUrl.optional(),
+  source: SourceSchema,
+})
+
+// One stop on the journey: title and years only, never the employer.
 export const RoleSchema = z.strictObject({
+  id: text,
   title: text,
+  // The short title the hero's role line cycles through; a role without one is not cycled.
+  cycleTitle: text.optional(),
   years: text,
+  hats: z.array(HatIdSchema).min(1),
+  skillsAdded: z.array(text),
+  work: z.strictObject({ items: z.array(text).min(1).max(4), source: SourceSchema }),
+  figures: z.array(SourcedTextSchema),
+  projects: z.array(CareerProjectSchema),
   proofIds: z.array(text),
   source: SourceSchema,
 })
@@ -94,8 +129,6 @@ export const TalkSchema = z.strictObject({
   source: SourceSchema,
 })
 
-export const SourcedTextSchema = z.strictObject({ text, source: SourceSchema })
-
 export const CaseStudySchema = z.strictObject({
   slug: text,
   title: text,
@@ -108,13 +141,15 @@ export const CaseStudySchema = z.strictObject({
 })
 
 export const ModelSchema = z.strictObject({
-  hero: z.strictObject({ name: text, roleLine: text, thesis: text }),
+  hero: z.strictObject({ name: text, roleLine: text, thesis: text, source: SourceSchema }),
   domains: z.array(DomainSchema),
   proofs: z.array(ProofSchema),
   methods: z.array(MethodSchema),
   materials: z.array(MaterialSchema),
   modes: z.array(ModeSchema),
   range: z.array(RangeCellSchema),
+  skills: z.array(SkillSchema),
+  hats: z.array(HatSchema),
   roles: z.array(RoleSchema),
   timeline: z.array(TimelineEntrySchema),
   talks: z.array(TalkSchema),
@@ -131,6 +166,11 @@ export type Domain = z.infer<typeof DomainSchema>
 export type Method = z.infer<typeof MethodSchema>
 export type Material = z.infer<typeof MaterialSchema>
 export type RangeCell = z.infer<typeof RangeCellSchema>
+export type SkillSet = z.infer<typeof SkillSetSchema>
+export type HatId = z.infer<typeof HatIdSchema>
+export type Skill = z.infer<typeof SkillSchema>
+export type Hat = z.infer<typeof HatSchema>
+export type CareerProject = z.infer<typeof CareerProjectSchema>
 export type Role = z.infer<typeof RoleSchema>
 export type TimelineEntry = z.infer<typeof TimelineEntrySchema>
 export type Talk = z.infer<typeof TalkSchema>

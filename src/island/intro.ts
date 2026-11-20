@@ -8,13 +8,14 @@
 //   3300-3900 ms  the lens switcher pulses once
 // Every animation is fill: backwards, so cancelling one leaves its element exactly as the settled
 // drawing has it. Stopping the intro is cancelling all of them and removing the axes.
+import { isTyping } from './dom'
 import type { IntroPhase } from './lenses/plan'
 import { EASE, type NodeLayout, svgEl } from './lenses/shared'
 import { onModalOpen } from './modal'
 import { nodeBox } from './morph'
 import { onReducedMotionChange, prefersReducedMotion } from './motion'
 import { finishAll, nodeLayouts, redraw } from './stage'
-import { currentLens, markSeenThisSession, onLensChange, seenThisSession, setLens } from './state'
+import { currentLens, lensForKey, markSeenThisSession, onLensChange, seenThisSession, setLens, shortcutsEnabled } from './state'
 
 export const INTRO_KEY = 'kp-intro-seen'
 
@@ -181,11 +182,20 @@ function assemble(stage: HTMLElement): { animations: Animation[]; axes: SVGGElem
   return { animations, axes: lines }
 }
 
+const canFocus = (element: HTMLElement | null): element is HTMLElement =>
+  element !== null && element.isConnected && element.getClientRects().length > 0 && !element.closest('[inert]') && !element.matches(':disabled')
+
 // Skip is about to hide: a keyboard user on it lands on Replay, or on the first Plan node when
-// Replay is not shown (reduced motion).
+// Replay is not shown (reduced motion). If neither can take focus, the stage itself does.
 function handOffFocus(replay: HTMLElement): void {
-  const target = replay.getClientRects().length > 0 ? replay : document.querySelector<HTMLElement>('#stage [data-node]')
-  target?.focus({ preventScroll: true })
+  for (const target of [replay, document.querySelector<HTMLElement>('#stage [data-node]')]) {
+    if (!canFocus(target)) continue
+    target.focus({ preventScroll: true })
+    if (document.activeElement === target) return
+  }
+  const stage = requireElement<HTMLElement>('#stage')
+  if (!stage.hasAttribute('tabindex')) stage.tabIndex = -1
+  stage.focus({ preventScroll: true })
 }
 
 // Resolves once the intro has ended, whether it ran out or was stopped through the signal.
@@ -248,7 +258,9 @@ export function initIntro(): void {
   window.addEventListener(
     'keydown',
     (event) => {
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && /^[1-5]$/.test(event.key)) stop()
+      // Only a press that switches the lens ends the intro: not with shortcuts off, not while typing.
+      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target) || !shortcutsEnabled()) return
+      if (lensForKey(event)) stop()
     },
     true,
   )

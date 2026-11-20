@@ -1,0 +1,25 @@
+---
+// Shows or hides the source under every claim on the page. Needs JavaScript, so it is hidden without it.
+// note: a line shown under the toggle while it is on, for claims that show their source another way.
+interface Props {
+  note?: string
+}
+
+const { note } = Astro.props
+---
+
+<button class="prov-toggle" type="button" id="provenance-toggle" aria-pressed="false">Sources</button>
+{note && <p class="prov-note" id="provenance-note">{note}</p>}
+
+<script>
+  import '../island/provenance'
+</script>
+
+<style>
+  .prov-toggle { border: 1px solid var(--control-line); background: transparent; color: inherit; padding: 7px 10px; font-family: var(--mono); font-size: 0.75rem; cursor: pointer; }
+  .prov-toggle:hover { border-color: var(--ink); }
+  .prov-toggle[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .prov-note { display: none; order: 5; flex-basis: 100%; margin: 0; text-align: right; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  :global(html[data-provenance="on"]) .prov-note { display: block; }
+  :global(html:not(.js)) .prov-toggle, :global(html:not(.js)) .prov-note { display: none; }
+</style>

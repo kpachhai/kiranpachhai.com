@@ -1,10 +1,10 @@
-import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { findViolations } from '../../scripts/gates/copy-scan'
 import { EMPLOYER_DIGESTS } from '../../scripts/gates/copy-rules'
-import { fetchGithubData, loadGithubData, runCli } from '../../scripts/data/fetch-github'
+import { COUNT_QUERIES, countSearchUrl, fetchGithubData, loadGithubData, runCli, writeAtomically } from '../../scripts/data/fetch-github'
 import { UPSTREAM_MAP } from '../../src/data/upstream-map'
 import { UpstreamSchema } from '../../src/model/schema'
 
@@ -31,6 +31,8 @@ const reviewItems = [
   { repository_url: 'https://api.github.com/repos/someone/unmapped-repo', state: 'closed', pull_request: { merged_at: null } },
 ]
 
+const filler = { repository_url: 'https://api.github.com/repos/someone/unmapped-repo', state: 'closed', pull_request: { merged_at: null } }
+
 function makeFetch() {
   const urls: string[] = []
   const impl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -40,12 +42,10 @@ function makeFetch() {
       const data: Record<string, unknown> = {}
       const query = JSON.parse(String(init?.body)).query as string
       if (query.includes('DISCUSSION')) {
-        return json({
-          data: {
-            authored: { nodes: [{ repository: { nameWithOwner: 'ava-labs/hypersdk', isPrivate: false } }] },
-            commented: { nodes: [{ repository: { nameWithOwner: 'someone/unmapped-repo', isPrivate: false } }, { repository: { nameWithOwner: 'MetaMask/snaps', isPrivate: true } }] },
-          },
-        })
+        const nodes = query.includes('author:')
+          ? [{ repository: { nameWithOwner: 'ava-labs/hypersdk', isPrivate: false } }]
+          : [{ repository: { nameWithOwner: 'someone/unmapped-repo', isPrivate: false } }, { repository: { nameWithOwner: 'MetaMask/snaps', isPrivate: true } }]
+        return json({ data: { discussions: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } })
       }
       for (const alias of query.match(/y\d{4}/g) ?? []) {
         data[alias] = {
@@ -54,15 +54,21 @@ function makeFetch() {
             { repository: { nameWithOwner: 'hashgraph/hedera-docs', isPrivate: false, owner: { login: 'hashgraph' } }, contributions: { totalCount: 3 } },
             { repository: { nameWithOwner: 'a/priv', isPrivate: true, owner: { login: 'a' } }, contributions: { totalCount: 99 } },
             { repository: { nameWithOwner: 'kpachhai/own', isPrivate: false, owner: { login: 'kpachhai' } }, contributions: { totalCount: 77 } },
+            { repository: { nameWithOwner: 'KPachhai/own-mixed-case', isPrivate: false, owner: { login: 'KPachhai' } }, contributions: { totalCount: 55 } },
           ],
         }
       }
       return json({ data: { user: data } })
     }
-    const query = decodeURIComponent(new URL(url).searchParams.get('q') ?? '')
-    const wantsItems = new URL(url).searchParams.get('per_page') !== '1'
-    const items = query.includes('reviewed-by:') ? reviewItems : prItems
-    return json({ total_count: countFor(query), items: wantsItems ? items : [] })
+    const params = new URL(url).searchParams
+    const query = decodeURIComponent(params.get('q') ?? '')
+    const total = countFor(query)
+    if (params.get('per_page') === '1') return json({ total_count: total, incomplete_results: false, items: [] })
+    // The fixture items, padded with unmapped PRs so every counted item arrives, served by page.
+    const fixture = query.includes('reviewed-by:') ? reviewItems : prItems
+    const all = [...fixture, ...Array.from({ length: total - fixture.length }, () => filler)]
+    const page = Number(params.get('page'))
+    return json({ total_count: total, incomplete_results: false, items: all.slice((page - 1) * 100, page * 100) })
   })
   return { impl: impl as unknown as typeof fetch, urls }
 }
@@ -76,6 +82,26 @@ describe('fetchGithubData', () => {
     for (const url of searches) {
       expect(url).toContain('is%3Apublic')
       expect(url).toContain('-user%3Akpachhai')
+    }
+  })
+
+  it('runs each search once: the authored-PR pages also give the authored count', async () => {
+    const { impl, urls } = makeFetch()
+    await fetchGithubData(impl, 'token')
+    const firstPages = urls
+      .filter((url) => url.includes('/search/issues'))
+      .map((url) => new URL(url).searchParams)
+      .filter((params) => params.get('page') === '1')
+      .map((params) => params.get('q'))
+    expect(firstPages).toHaveLength(4)
+    expect(new Set(firstPages).size).toBe(firstPages.length)
+  })
+
+  it('links each count to the same search it runs', () => {
+    for (const key of Object.keys(COUNT_QUERIES) as (keyof typeof COUNT_QUERIES)[]) {
+      const link = new URL(countSearchUrl(key))
+      expect(link.origin + link.pathname).toBe('https://github.com/search')
+      expect(link.searchParams.get('q')).toBe(`${COUNT_QUERIES[key].terms} is:public -user:kpachhai`)
     }
   })
 
@@ -148,6 +174,61 @@ describe('fetchGithubData', () => {
     const impl = (async () => json({ total_count: 'many', items: [] })) as unknown as typeof fetch
     await expect(fetchGithubData(impl, 'token')).rejects.toThrow()
   })
+
+  it('rejects a search GitHub marks as incomplete', async () => {
+    const { impl: base } = makeFetch()
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await base(input, init)
+      if (!String(input).includes('/search/issues')) return response
+      return json({ ...(await response.json()), incomplete_results: true })
+    }) as typeof fetch
+    await expect(fetchGithubData(impl, 'token')).rejects.toThrow(/incomplete/)
+  })
+
+  it('reads every page of a search whose total passes 100, and rejects one that comes back short', async () => {
+    const reviewed = Array.from({ length: 150 }, () => reviewItems[0])
+    const pagesAsked: string[] = []
+    const make = (served: number) => {
+      const { impl: base } = makeFetch()
+      return (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input))
+        const query = url.searchParams.get('q') ?? ''
+        if (!url.pathname.includes('/search/issues') || !query.includes('reviewed-by:')) return base(input, init)
+        const page = Number(url.searchParams.get('page'))
+        pagesAsked.push(String(page))
+        const items = reviewed.slice(0, served).slice((page - 1) * 100, page * 100)
+        return json({ total_count: 150, incomplete_results: false, items })
+      }) as typeof fetch
+    }
+    const data = await fetchGithubData(make(150), 'token')
+    expect(pagesAsked).toEqual(['1', '2'])
+    expect(data.counts.prsReviewed).toBe(150)
+    await expect(fetchGithubData(make(120), 'token')).rejects.toThrow(/120 of 150/)
+  })
+
+  it('pages through discussions with the cursor', async () => {
+    const { impl: base } = makeFetch()
+    const discussionQueries: string[] = []
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const query = init?.body ? (JSON.parse(String(init.body)).query as string) : ''
+      if (!query.includes('DISCUSSION') || !query.includes('author:')) return base(input, init)
+      discussionQueries.push(query)
+      const first = !query.includes('after:')
+      const nodes = first ? [] : [{ repository: { nameWithOwner: 'ava-labs/hypersdk', isPrivate: false } }]
+      return json({ data: { discussions: { pageInfo: { hasNextPage: first, endCursor: first ? 'CURSOR1' : null }, nodes } } })
+    }) as typeof fetch
+    const data = await fetchGithubData(impl, 'token')
+    expect(discussionQueries).toHaveLength(2)
+    expect(discussionQueries[1]).toContain('after: "CURSOR1"')
+    expect(data.ledger.filter((entry) => entry.status === 'discussion').map((entry) => entry.href)).toEqual(['https://github.com/ava-labs/hypersdk'])
+  })
+
+  it('leaves out the owner\'s own repos whatever the login case', async () => {
+    const { impl } = makeFetch()
+    const data = await fetchGithubData(impl, 'token')
+    // 10 (a/pub) + 3 (hashgraph/hedera-docs); kpachhai/own and KPachhai/own-mixed-case are the owner's.
+    expect(data.commitsByYear['2020']).toBe(13)
+  })
 })
 
 describe('runCli', () => {
@@ -173,6 +254,83 @@ describe('runCli', () => {
     warn.mockRestore()
     expect(code).toBe(0)
     expect(existsSync(out)).toBe(false)
+  })
+
+  // One request failing, early or late, must leave the existing file exactly as it was.
+  it.each([
+    ['the late GraphQL commit query', (url: string, body: string) => url.includes('/graphql') && body.includes('contributionsCollection')],
+    ['a single search', (url: string) => url.includes('/search/issues') && decodeURIComponent(url).includes('commenter:')],
+    ['the discussion query', (url: string, body: string) => url.includes('/graphql') && body.includes('DISCUSSION')],
+  ])('keeps an existing github.json untouched when %s fails', async (_name, failsOn) => {
+    const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+    const out = join(dir, 'github.json')
+    const before = '{"existing":true}\n'
+    writeFileSync(out, before)
+    const { impl: base } = makeFetch()
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      failsOn(String(input), String(init?.body ?? '')) ? json({}, 500) : base(input, init)) as typeof fetch
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const code = await runCli({ fetchImpl: impl, token: 'token', outPath: out })
+    warn.mockRestore()
+    expect(code).toBe(0)
+    expect(readFileSync(out, 'utf8')).toBe(before)
+    expect(readdirSync(dir)).toEqual(['github.json'])
+  })
+
+  it('writes through a temporary file and leaves none behind', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+    const out = join(dir, 'github.json')
+    writeFileSync(out, '{"old":true}\n')
+    await runCli({ fetchImpl: makeFetch().impl, token: 'token', outPath: out })
+    expect(readdirSync(dir)).toEqual(['github.json'])
+    expect(JSON.parse(readFileSync(out, 'utf8')).counts.prsAuthored).toBe(61)
+  })
+
+  it('writes a temporary file, then renames it over the target', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+    const out = join(dir, 'github.json')
+    const calls: string[] = []
+    writeAtomically(out, '{"new":true}\n', {
+      writeFileSync: (path, text) => {
+        calls.push(`write ${path === out ? 'target' : path.endsWith('.tmp') && path.startsWith(out) ? 'temp' : path}`)
+        writeFileSync(path, text)
+      },
+      renameSync: (from, to) => {
+        calls.push(`rename ${from.endsWith('.tmp') ? 'temp' : from} -> ${to === out ? 'target' : to}`)
+        renameSync(from, to)
+      },
+    })
+    expect(calls).toEqual(['write temp', 'rename temp -> target'])
+    expect(readFileSync(out, 'utf8')).toBe('{"new":true}\n')
+  })
+
+  it('leaves the old file intact and no temporary file when the write crashes part way', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+    const out = join(dir, 'github.json')
+    const before = '{"old":true}\n'
+    writeFileSync(out, before)
+    const crash = () =>
+      writeAtomically(out, '{"new":true,"counts":{}}\n', {
+        // Half the bytes land, then the process "dies".
+        writeFileSync: (path, text) => {
+          writeFileSync(path, text.slice(0, 8))
+          throw new Error('disk full')
+        },
+        renameSync,
+      })
+    expect(crash).toThrow('disk full')
+    expect(readFileSync(out, 'utf8')).toBe(before)
+    expect(readdirSync(dir)).toEqual(['github.json'])
+  })
+
+  it('falls back to the snapshot when the live file is truncated', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gh-'))
+    const out = join(dir, 'github.json')
+    writeFileSync(out, '{"asOf": "2026-')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const loaded = loadGithubData({ livePath: out })
+    warn.mockRestore()
+    expect(loaded.counts.prsAuthored).toBe(61)
   })
 
   it('writes the file on full success and the loader prefers it', async () => {
@@ -202,8 +360,25 @@ describe('snapshot and map', () => {
     expect(data.ledger.length).toBeGreaterThan(0)
   })
 
-  it('has no ledger label that violates the copy rules', () => {
-    const labels = [...Object.values(UPSTREAM_MAP).map((entry) => entry.label), ...loadGithubData({ livePath: '/nonexistent' }).ledger.map((entry) => entry.label)]
+  it('labels each repo without a status word, and the snapshot uses the map labels', () => {
+    for (const [repo, entry] of Object.entries(UPSTREAM_MAP)) {
+      expect(entry.label, repo).not.toMatch(/\b(discussions?|merged|open|commits?|reviews?|reviewed|fix(es)?)\b/i)
+    }
+    for (const entry of loadGithubData({ livePath: '/nonexistent' }).ledger) {
+      const repo = entry.href.replace('https://github.com/', '')
+      expect(entry.label, repo).toBe(UPSTREAM_MAP[repo]?.label)
+    }
+  })
+
+  it('names the HyperSDK repo as the model and the toolkit do', () => {
+    expect(UPSTREAM_MAP['ava-labs/hypersdk']?.label).toBe('HyperSDK')
+  })
+
+  it('has no ledger label or pinned-link note that violates the copy rules', () => {
+    const labels = [
+      ...Object.values(UPSTREAM_MAP).flatMap((entry) => [entry.label, ...(entry.links ?? []).map((link) => link.note)]),
+      ...loadGithubData({ livePath: '/nonexistent' }).ledger.map((entry) => entry.label),
+    ]
     for (const label of labels) {
       expect(findViolations(label, { employerDigests: EMPLOYER_DIGESTS }), label).toEqual([])
     }

@@ -39,7 +39,7 @@ export const caseStudies: CaseStudy[] = [
     proofIds: ['signscope-snap'],
     source: url('https://github.com/kpachhai/signscope-snap'),
     problem: {
-      text: 'SignScope sets out to give a deep insight into Hedera transactions in MetaMask, before they are signed.',
+      text: 'In MetaMask, SignScope shows what a Hedera transaction contains before it is signed.',
       source: SNAP_MANIFEST,
     },
     approach: {
@@ -87,11 +87,11 @@ export const caseStudies: CaseStudy[] = [
       source: OWNER,
     },
     approach: {
-      text: 'An explorer for cross-ledger channels and message journeys. Each ledger is read by a plugin (EVM JSON-RPC, Hiero mirror node), and the plugins sit behind a conformance suite.',
+      text: 'An explorer for cross-ledger channels and message journeys. Each ledger is read by a plugin (EVM JSON-RPC, Hiero mirror node).',
       source: OWNER,
     },
     methods: {
-      text: 'A build gate keeps chain libraries inside the ledger plugins.',
+      text: 'The ledger plugins sit behind a conformance suite.',
       source: OWNER,
     },
     outcome: {
@@ -109,15 +109,15 @@ export const caseStudies: CaseStudy[] = [
       source: OWNER,
     },
     approach: {
-      text: 'A course of written lessons with interactive widgets and Python exercises.',
+      text: 'A course with interactive widgets and Python exercises.',
       source: OWNER,
     },
     methods: {
-      text: 'A governing spec, and post-build gates that read the built course.',
+      text: 'Post-build gates check the built course.',
       source: OWNER,
     },
     outcome: {
-      text: 'The course is written and live.',
+      text: 'The course is written.',
       source: OWNER,
     },
   },

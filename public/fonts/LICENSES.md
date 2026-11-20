@@ -1,6 +1,11 @@
 # Font licences
 
-Self-hosted subsets (Basic Latin plus common punctuation and arrows, woff2, variable weight axis) of the Fontsource packages below. Licence text is as stated in each package.
+Self-hosted subsets (Basic Latin plus common punctuation and arrows, woff2, variable weight axis) of the Fontsource packages below. Licence text is as stated in each package. Each file below was cut from its package's woff2 with fontTools; the licence travels with the font.
+
+- bricolage-grotesque-latin-wght-wdth82-normal.woff2: from bricolage-grotesque-latin-wdth-normal.woff2 (wght and wdth axes), width pinned at 82% with fontTools varLib.instancer (weight stays variable), then subset to the 108 shipped code points. 26,396 bytes.
+- newsreader-latin-wght-normal.woff2: wght axis, Basic Latin subset. 36,476 bytes.
+- newsreader-thesis-wght-italic.woff2: from newsreader-latin-wght-italic.woff2, subset with fontTools pyftsubset to the 24 characters of the hero thesis line. 10,412 bytes.
+- martian-mono-latin-wght-normal.woff2: wght axis, Basic Latin subset. 14,424 bytes.
 
 ## bricolage-grotesque
 
