@@ -224,7 +224,7 @@ describe('career projects from the old site', () => {
 
   it('links only the live targets', () => {
     const hrefs = projects.flatMap((item) => (item.href ? [item.href] : [])).sort()
-    expect(hrefs).toEqual(['https://github.com/tuum-tech/assist-service', 'https://www.profile.site'])
+    expect(hrefs).toEqual(['https://github.com/tuum-tech/assist-service'])
   })
 
   it('has unique project ids', () => {

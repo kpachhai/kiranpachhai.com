@@ -73,8 +73,8 @@ test.describe('journey without JavaScript', () => {
   test('links only the live career projects', async ({ page }) => {
     await page.goto('/')
     const hrefs = await page.locator('#journey .projects a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))
-    for (const href of ['https://github.com/tuum-tech/assist-service', 'https://www.profile.site']) expect(hrefs).toContain(href)
-    expect(hrefs.filter((href) => /develap|nucleus|noderators|Hive\.Node|material\.network/i.test(href ?? ''))).toEqual([])
+    expect(hrefs).toContain('https://github.com/tuum-tech/assist-service')
+    expect(hrefs.filter((href) => /develap|nucleus|noderators|Hive\.Node|material\.network|profile\.site/i.test(href ?? ''))).toEqual([])
     expect(await page.locator('body').innerText()).not.toMatch(/mtrl/i)
   })
 })

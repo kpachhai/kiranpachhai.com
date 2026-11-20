@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
-type Step = { uses?: string; run?: string; with?: Record<string, unknown> }
+type Step = { uses?: string; run?: string; shell?: string; with?: Record<string, unknown> }
 type Job = { if?: string; needs?: string | string[]; permissions?: Record<string, string>; 'runs-on'?: string; steps: Step[] }
 type Workflow = { on: Record<string, unknown>; permissions?: Record<string, string>; jobs: Record<string, Job> }
 
@@ -71,6 +71,16 @@ describe('workflows', () => {
     expect(ci.jobs.verify['runs-on']).toBe('ubuntu-latest')
     expect(ci.jobs['windows-smoke']['runs-on']).toBe('windows-latest')
     expect(JSON.stringify(ci.jobs['windows-smoke'].steps)).toMatch(/@windows/)
+  })
+
+  it('windows-smoke runs the @windows grep in bash, since PowerShell reads @windows as a variable', () => {
+    const grepStep = ci.jobs['windows-smoke'].steps.find((step) => (step.run ?? '').includes('@windows'))
+    expect(grepStep?.shell).toBe('bash')
+  })
+
+  it('lighthouse launches Chrome without the sandbox, which Ubuntu 24 runners cannot start', () => {
+    const config = JSON.parse(readFileSync('lighthouserc.json', 'utf8')) as { ci: { collect: { settings: { chromeFlags?: string } } } }
+    expect(config.ci.collect.settings.chromeFlags ?? '').toMatch(/--no-sandbox/)
   })
 
   it('verify runs data, build, gates and e2e in that order, with Node from .nvmrc', () => {

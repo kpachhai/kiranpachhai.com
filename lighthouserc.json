@@ -5,6 +5,7 @@
       "url": ["http://localhost/", "http://localhost/work/schedule-service/"],
       "numberOfRuns": 3,
       "settings": {
+        "chromeFlags": "--no-sandbox",
         "formFactor": "mobile",
         "onlyCategories": ["performance"]
       }

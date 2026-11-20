@@ -154,7 +154,6 @@ export const roles: Role[] = [
         id: 'profile',
         label: 'Profile',
         detail: 'Decentralized social hub in React with DIDs, NFTs and a personal vault',
-        href: 'https://www.profile.site',
         source: OLD_PORTFOLIO,
       },
       {

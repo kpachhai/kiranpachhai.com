@@ -12,6 +12,12 @@ const LIVE = fileURLToPath(new URL('../../src/data/github.json', import.meta.url
 const proofIds = new Set(model.proofs.map((proof) => proof.id))
 
 describe('content model', () => {
+  it('does not link the Profile project, whose domain is now parked', () => {
+    const profile = model.roles.flatMap((role) => role.projects).find((project) => project.id === 'profile')
+    expect(profile).toBeDefined()
+    expect(profile?.href).toBeUndefined()
+  })
+
   it('has the six domains in order', () => {
     expect(model.domains.length).toBe(6)
     expect(model.domains.map((domain) => domain.id)).toEqual([...DOMAIN_IDS])
