@@ -1,17 +1,23 @@
 // Island entry: wires the bar, the drawer, the palette and the lens state onto the static page.
 // Without JavaScript none of this runs and the static Index list in #stage stays the page;
 // with it, stage.ts turns that list into the lens nodes.
+import { initBom } from './bom'
 import { readIslandData } from './data'
 import { initDrawer, isDrawerOpen, onDrawerChange } from './drawer'
+import { initIntro } from './intro'
+import { prefersReducedMotion } from './motion'
 import { initPalette, isPaletteOpen } from './palette'
+import { ROLES_KEY, runRoleCycle } from './roles'
 import { initStage } from './stage'
 import {
   LENSES,
   THEMES,
   currentTheme,
   lensFromHash,
+  markSeenThisSession,
   onLensChange,
   onThemeChange,
+  seenThisSession,
   setLens,
   setTheme,
   shortcutsEnabled,
@@ -74,19 +80,30 @@ function announce(live: HTMLElement): void {
   })
 }
 
+// Once per session the hero's role line steps through the roles held; reduced motion keeps the
+// settled line, and the static roles list shows instead.
+function cycleRoles(roles: { title: string }[]): void {
+  if (prefersReducedMotion() || seenThisSession(ROLES_KEY)) return
+  markSeenThisSession(ROLES_KEY)
+  void runRoleCycle(requireElement('role-box'), roles, { reduced: false })
+}
+
 function main(): void {
   const stage = requireElement('stage')
   const data = readIslandData()
   initStage(stage, data)
   initDrawer(data)
   initPalette(data)
+  initBom()
   bindLensKeys()
   bindThemeControl()
   measureBar()
   announce(requireElement('island-live'))
+  cycleRoles(data.roles)
   // A rejection stays unhandled on purpose: it surfaces in the console instead of a silent half-island.
   void startLens(stage).then(() => {
     document.documentElement.dataset.island = 'ready'
+    initIntro()
   })
 }
 

@@ -3,6 +3,13 @@
 // Elements marked data-modal manage their own closed state and are inert whenever not on top;
 // the live region stays out of this so announcements still reach assistive tech.
 const stack: HTMLElement[] = []
+const openSubscribers = new Set<(dialog: HTMLElement) => void>()
+
+// Told whenever a dialog comes to the top, so motion that should not run under it can stop.
+export function onModalOpen(cb: (dialog: HTMLElement) => void): () => void {
+  openSubscribers.add(cb)
+  return () => openSubscribers.delete(cb)
+}
 
 function apply(): void {
   const top = stack[stack.length - 1]
@@ -19,6 +26,7 @@ export function pushModal(dialog: HTMLElement): void {
   if (position >= 0) stack.splice(position, 1)
   stack.push(dialog)
   apply()
+  for (const cb of openSubscribers) cb(dialog)
 }
 
 export function popModal(dialog: HTMLElement): void {

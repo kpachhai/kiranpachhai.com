@@ -163,3 +163,21 @@ export function setShortcutsEnabled(on: boolean): void {
     // Storage unavailable: the choice holds for this visit.
   }
 }
+
+// Once-per-session flags (the intro, the role cycle). Storage can throw; the flag then reads unset,
+// so the motion may play again on the next load, which is harmless.
+export function seenThisSession(key: string): boolean {
+  try {
+    return window.sessionStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function markSeenThisSession(key: string): void {
+  try {
+    window.sessionStorage.setItem(key, '1')
+  } catch {
+    // Storage unavailable: nothing to remember.
+  }
+}

@@ -1,7 +1,19 @@
 ---
 // The no-JS hero: identity plus the Index lens of the capability map. The island mounts on #stage later.
 import { model } from '../../model'
-import { languages, proofsInDomain } from '../../lib/site'
+import { languages, proofById, proofsInDomain } from '../../lib/site'
+
+// The bill of materials: three bands, each row with where it is used and the areas of work involved.
+const BANDS = [
+  { id: 'language', label: 'Languages', part: 'L' },
+  { id: 'tool', label: 'Tools and platforms', part: 'T' },
+  { id: 'discipline', label: 'Disciplines', part: 'D' },
+] as const
+const areaNumbers = (proofIds: string[]) =>
+  model.domains
+    .map((domain, position) => ({ id: domain.id, number: String(position + 1).padStart(2, '0') }))
+    .filter((area) => proofIds.some((id) => proofById(id).domainId === area.id))
+    .map((area) => area.number)
 
 const SECTIONS: [string, string][] = [
   ['#work', 'Selected work'],
@@ -16,7 +28,10 @@ const SECTIONS: [string, string][] = [
 <header class="hero wrap">
   <h1 class="name">{model.hero.name}<span class="dot" aria-hidden="true">.</span></h1>
   <div class="intro">
-    <p class="role">{model.hero.roleLine}</p>
+    <div class="role-box" id="role-box" data-role-box>
+      <p class="role">{model.hero.roleLine}</p>
+    </div>
+    <p class="roles-held"><span class="eyebrow">Roles held</span> <span>{model.roles.map((role) => role.title).join(', ')}</span></p>
     <p class="thesis">{model.hero.thesis}</p>
     <p class="langs">
       <span class="eyebrow">Languages</span>
@@ -31,6 +46,10 @@ const SECTIONS: [string, string][] = [
 <section id="stage" class="stage" data-lens="index" aria-labelledby="stage-h">
   <div class="wrap">
     <h2 id="stage-h" class="sr-only">Areas of work and their proof</h2>
+    <div class="stage-cap js-only">
+      <button class="tool" type="button" id="intro-skip" hidden>Skip intro</button>
+      <button class="tool" type="button" id="intro-replay">Replay intro</button>
+    </div>
     <ol class="index">
       {
         model.domains.map((domain, position) => {
@@ -54,6 +73,37 @@ const SECTIONS: [string, string][] = [
         })
       }
     </ol>
+    <section class="bom" aria-labelledby="bom-h">
+      <div class="bom-head">
+        <h3 id="bom-h">Bill of materials</h3>
+        <span class="bom-cols" aria-hidden="true">Part / material / where used / areas</span>
+      </div>
+      {
+        BANDS.map((band) => (
+          <div class="bom-band" data-band={band.id}>
+            <h4 class="bom-band-h">{band.label}</h4>
+            <ol class="bom-list">
+              {model.materials
+                .filter((material) => material.band === band.id)
+                .map((material, position) => (
+                  <li data-material={material.id}>
+                    <div class="bom-row">
+                      <span class="pn" aria-hidden="true">{`${band.part}${position + 1}`}</span>
+                      <span class="mt">{material.name}</span>
+                      <span class="used">{material.usedIn.map((id) => proofById(id).label).join('; ')}</span>
+                      <span class="dm" aria-hidden="true">
+                        {areaNumbers(material.usedIn).map((number) => (
+                          <i>{number}</i>
+                        ))}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+            </ol>
+          </div>
+        ))
+      }
+    </section>
   </div>
 </section>
 
@@ -63,10 +113,30 @@ const SECTIONS: [string, string][] = [
   .dot { color: var(--accent); }
   .intro p { margin: 0 0 12px; max-width: 46ch; }
   .role { font-size: 1.1rem; }
+  /* The role cycle plays in an overlay on the real line, which keeps its box and its place in the
+     accessibility tree; opacity (not visibility) hides it so screen readers still read it. */
+  .role-box { position: relative; }
+  .role-box[data-cycling] .role { opacity: 0; }
+  .role-box :global(.role-cycle) { position: absolute; left: 0; top: 0; right: 0; opacity: 0; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: var(--display); font-stretch: 82%; font-weight: 680; font-size: 1.25rem; line-height: 1.3; color: var(--ink); }
+  /* The roles held are listed statically when the line does not cycle: no JavaScript, or reduced motion. */
+  .roles-held { display: none; font-family: var(--mono); font-size: 0.75rem; line-height: 1.6; color: var(--muted); }
+  .roles-held .eyebrow { margin-right: 6px; }
+  :global(html:not(.js)) .roles-held { display: block; }
+  @media (prefers-reduced-motion: reduce) {
+    .roles-held { display: block; }
+  }
   .thesis { font-style: italic; color: var(--muted); }
   .langs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
   .lang { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--rule); padding: 2px 8px; }
   .jump { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 0.75rem; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .stage-cap { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+  /* Reduced motion has nothing to replay. Skip stays laid out while shown, so the intro can hand its
+     focus on when reduced motion turns on mid-intro; the empty row then folds away. */
+  @media (prefers-reduced-motion: reduce) {
+    #intro-replay { display: none; }
+    .stage-cap:not(:has(#intro-skip:not([hidden]))) { display: none; }
+  }
   .stage { background: var(--s-ground); color: var(--s-ink); padding-block: 24px 32px; border-block: 1px solid var(--rule); }
   .index { list-style: none; margin: 0; padding: 0; }
   .entry { padding-block: 18px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 32px; }

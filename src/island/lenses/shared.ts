@@ -14,6 +14,8 @@ export interface LensModule {
   layout(stage: StageRect, m: LensModel, opts?: LayoutOptions): NodeLayout[]
   height(width: number, m: LensModel, opts?: LayoutOptions): number
   decorate(svg: SVGSVGElement, layouts: NodeLayout[], m: LensModel): Animation[]
+  // Gives back what decorate made outside the SVG layer (Terrain's canvas and its loop).
+  release?(): void
 }
 
 export const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'

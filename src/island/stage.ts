@@ -14,49 +14,29 @@ import * as indexLens from './lenses/index'
 import * as planLens from './lenses/plan'
 import * as rangeLens from './lenses/range'
 import {
-  BREAK_TABLET,
   DRAW_IN_AT,
   EASE,
   FADE_MS,
   MORPH_MS,
-  type LayoutOptions,
-  type LensModel,
   type LensModule,
   type NodeLayout,
-  type StageRect,
   methodsOf,
   proofCount,
   rootRem,
-  scaleOf,
 } from './lenses/shared'
 import { morph, nodeBox } from './morph'
 import { onReducedMotionChange, prefersReducedMotion } from './motion'
-import { type LensContext, type LensId, currentLens, registerLens } from './state'
+import { DEFAULT_LENS, LENSES, type LensContext, type LensId, currentLens, registerLens, setLens } from './state'
 
-// Until the Terrain lens lands, its nodes sit as spot heights on an empty survey ground.
-const SUMMITS_WIDE = [[0.16, 0.28], [0.47, 0.19], [0.8, 0.3], [0.3, 0.72], [0.6, 0.6], [0.85, 0.78]]
-const SUMMITS_NARROW = [[0.3, 0.08], [0.71, 0.23], [0.3, 0.4], [0.7, 0.55], [0.3, 0.71], [0.7, 0.86]]
-const terrainPlaceholder: LensModule = {
-  height: (width: number, _m: LensModel, opts?: LayoutOptions) => Math.round((width >= BREAK_TABLET ? 560 : 660) * scaleOf(opts)),
-  layout(stage: StageRect, m: LensModel, opts?: LayoutOptions): NodeLayout[] {
-    const wide = stage.width >= BREAK_TABLET
-    const w = wide ? 184 : 150
-    const ground = (wide ? 520 : 600) * scaleOf(opts)
-    return m.domains.map((domain, i) => {
-      const [fx, fy] = (wide ? SUMMITS_WIDE : SUMMITS_NARROW)[i % 6]
-      const cx = Math.max(w / 2 + 8, Math.min(stage.width - w / 2 - 8, fx * stage.width))
-      return { domainId: domain.id, x: Math.round(cx - w / 2), y: Math.round(fy * ground), w, h: Math.round(60 * scaleOf(opts)), variant: 'terrain' }
-    })
-  },
-  decorate: () => [],
-}
-
-const MODULES: Record<LensId, LensModule> = {
+// Terrain is the one lens loaded on first use, so the initial route never carries its code.
+const MODULES: Partial<Record<LensId, LensModule>> = {
   plan: planLens,
-  terrain: terrainPlaceholder,
   console: consoleLens,
   index: indexLens,
   range: rangeLens,
+}
+const LAZY: Partial<Record<LensId, () => Promise<LensModule>>> = {
+  terrain: () => import('./lenses/terrain'),
 }
 
 let data: IslandData
@@ -67,6 +47,7 @@ let layouts: NodeLayout[] = []
 let shown: LensId | null = null
 let openDomain: DomainId | null = null
 let operation = 0
+let releaseShown: (() => void) | null = null
 
 const settledAll = (animations: Animation[]) =>
   Promise.all(animations.map((animation) => animation.finished.then(() => undefined, () => undefined)))
@@ -86,6 +67,21 @@ export function finishAll(): void {
   }
 }
 
+// For the intro: the node rects of the shown lens, and a fresh draw-in of its decorations with the
+// animations still running, so the intro can retime them. The nodes stay where they are.
+export function nodeLayouts(): NodeLayout[] {
+  return layouts.map((rect) => ({ ...rect }))
+}
+
+export function redraw(): Animation[] {
+  if (!shown) return []
+  const height = parseFloat(box.style.height)
+  const animations = draw(shown, box.clientWidth, height)
+  neededHeight(height)
+  markOpenDomain()
+  return animations
+}
+
 function cancelAll(): void {
   for (const animation of running()) animation.cancel()
 }
@@ -98,11 +94,18 @@ function measure(): NodeLayout[] {
   })
 }
 
+// Clears the decoration layer and anything a lens drew beside it.
+function clearDecorations(): void {
+  releaseShown?.()
+  releaseShown = null
+  svg.replaceChildren()
+}
+
 function sizeDecorations(width: number, height: number): void {
   svg.setAttribute('width', String(width))
   svg.setAttribute('height', String(height))
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
-  svg.replaceChildren()
+  clearDecorations()
 }
 
 // HTML blocks inside the decorations can wrap taller than estimated; the stage grows to hold them.
@@ -123,9 +126,17 @@ function markOpenDomain(): void {
   for (const row of svg.querySelectorAll<HTMLElement>('[data-m]')) row.classList.toggle('on', methods.some((id) => id === row.dataset.m))
 }
 
+function moduleOf(lens: LensId): LensModule {
+  const module = MODULES[lens]
+  if (!module) throw new Error(`stage: lens ${lens} is not loaded`)
+  return module
+}
+
 function draw(lens: LensId, width: number, height: number): Animation[] {
   sizeDecorations(width, height)
-  return MODULES[lens].decorate(svg, layouts, data)
+  const module = moduleOf(lens)
+  releaseShown = module.release ?? null
+  return module.decorate(svg, layouts, data)
 }
 
 function render(lens: LensId, requested: boolean): Promise<void> {
@@ -137,7 +148,7 @@ function render(lens: LensId, requested: boolean): Promise<void> {
   const fromHeight = box.getBoundingClientRect().height
   cancelAll()
   delete stage.dataset.settled
-  const module = MODULES[lens]
+  const module = moduleOf(lens)
   const width = box.clientWidth
   const opts = { rem: rootRem() }
   let height = module.height(width, data, opts)
@@ -171,17 +182,79 @@ function render(lens: LensId, requested: boolean): Promise<void> {
 async function leave(context: LensContext): Promise<void> {
   const mine = ++operation
   delete stage.dataset.settled
-  const group = svg.querySelector<SVGGElement>('[data-deco]')
-  if (!group) return
-  if (!context.animate || prefersReducedMotion()) {
-    group.remove()
+  // The lens's SVG group plus any canvas it drew beside the layer fade out together.
+  const layers: Element[] = [...svg.querySelectorAll('[data-deco]'), ...box.querySelectorAll(':scope > canvas')]
+  if (!context.animate || prefersReducedMotion() || layers.length === 0) {
+    clearDecorations()
     return
   }
-  for (const animation of group.getAnimations({ subtree: true })) animation.cancel()
-  const fade = group.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: 'linear', fill: 'forwards' })
-  await fade.finished.catch(() => undefined)
+  for (const layer of layers) for (const animation of layer.getAnimations({ subtree: true })) animation.cancel()
+  const fades = layers.map((layer) => layer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: FADE_MS, easing: 'linear', fill: 'forwards' }))
+  await settledAll(fades)
   // A newer enter has already cleared the layer and drawn its own lens; leave it alone.
-  if (mine === operation) group.remove()
+  if (mine === operation) clearDecorations()
+}
+
+// A lens not yet loaded keeps the stage as it is (same height, nodes where they stand) and marks
+// it busy until its module arrives. One load runs per lens however often it is asked for; only
+// the newest enter may draw once it resolves.
+const loading: Partial<Record<LensId, Promise<LensModule>>> = {}
+const failedUrl: Partial<Record<LensId, string>> = {}
+let entering = 0
+let retries = 0
+
+// Browsers keep a failed module fetch in their module map, so importing the same URL again rejects
+// without a request. Chromium and Firefox name the chunk in the error; a retry imports that
+// same-origin URL with a fresh query. Without a URL the plain import is tried again.
+function chunkUrlOf(error: unknown): string | undefined {
+  const match = (error instanceof Error ? error.message : String(error)).match(/https?:\/\/[^\s'"]+?\.js\b/)
+  if (!match) return undefined
+  const url = new URL(match[0])
+  return url.origin === window.location.origin ? `${url.origin}${url.pathname}` : undefined
+}
+
+function loadLens(lens: LensId, load: () => Promise<LensModule>): Promise<LensModule> {
+  const url = failedUrl[lens]
+  return url ? (import(/* @vite-ignore */ `${url}?retry=${++retries}`) as Promise<LensModule>) : load()
+}
+const LOAD_FAILED = 'Terrain view could not load.'
+
+async function enter(context: LensContext): Promise<void> {
+  const lens = context.to
+  const mine = ++entering
+  if (MODULES[lens]) {
+    // A newer, loaded lens ends any busy state an older load left behind.
+    stage.removeAttribute('aria-busy')
+    return render(lens, context.animate)
+  }
+  const load = LAZY[lens]
+  if (!load) throw new Error(`stage: no module for lens ${lens}`)
+  stage.setAttribute('aria-busy', 'true')
+  try {
+    MODULES[lens] = await (loading[lens] ??= loadLens(lens, load))
+  } catch (error) {
+    // Forget the failed load so the next press tries again.
+    delete loading[lens]
+    failedUrl[lens] ??= chunkUrlOf(error)
+    if (mine !== entering) return
+    stage.removeAttribute('aria-busy')
+    if (currentLens() === lens) await revert(context, error)
+    return
+  }
+  if (mine !== entering) return
+  stage.removeAttribute('aria-busy')
+  if (currentLens() !== lens) return
+  return render(lens, context.animate)
+}
+
+// The lens that could not load is undone through state, so the controls, the hash, data-lens and
+// the decorations all return to the lens shown before it; then the live region says why, once.
+async function revert(context: LensContext, error: unknown): Promise<void> {
+  console.error(`stage: the ${context.to} lens failed to load`, error)
+  const back = context.from && context.from !== context.to ? context.from : DEFAULT_LENS
+  await setLens(back, { animate: false })
+  const live = document.getElementById('island-live')
+  if (live) live.textContent = LOAD_FAILED
 }
 
 function convertNodes(list: HTMLElement): void {
@@ -246,9 +319,7 @@ export function initStage(root: HTMLElement, islandData: IslandData): void {
   stage.classList.add('lensed')
   watchSize(probe)
 
-  for (const lens of Object.keys(MODULES) as LensId[]) {
-    registerLens(lens, { enter: (context) => render(context.to, context.animate), leave })
-  }
+  for (const lens of LENSES) registerLens(lens, { enter, leave })
   // Reduced motion switched on mid-morph: jump every running animation to its end.
   onReducedMotionChange((reduced) => {
     if (reduced) finishAll()

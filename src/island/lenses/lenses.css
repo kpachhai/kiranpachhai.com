@@ -34,12 +34,16 @@
 #stage[data-lens="plan"] .node[aria-expanded="true"] { border-color: var(--plan-acc); color: var(--plan-acc); }
 #stage[data-lens="plan"] .node[aria-expanded="true"] .n-num { background: var(--plan-acc); color: var(--plan-ground); border-color: var(--plan-acc); }
 
-/* Terrain, until its lens lands: spot heights on the survey ground */
-#stage[data-lens="terrain"] .node { flex-direction: column; align-items: center; gap: 5px; text-align: center; font-family: var(--display); font-stretch: 80%; }
+/* Terrain: spot heights on summits. Each label sits on a plate of the ground colour, solid for 4px
+   past the text, then fading into the contours, so dense lines never pass behind the letters. */
+#stage[data-lens="terrain"] .node { flex-direction: column; align-items: center; gap: 5px; text-align: center; font-family: var(--display); font-stretch: 80%; color: var(--ter-ink); }
 #stage[data-lens="terrain"] .n-tri { display: block; width: 14px; height: 12px; background: var(--ter-ink); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-#stage[data-lens="terrain"] .n-title { font-size: 0.875rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.07em; line-height: 1.2; }
+#stage[data-lens="terrain"] .n-title { max-width: 100%; padding: 1px 5px; border-radius: 3px; background: var(--ter-ground); box-shadow: 0 0 0 4px var(--ter-ground), 0 0 6px 7px var(--ter-ground);
+  font-size: 0.875rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.07em; line-height: 1.2; }
 #stage[data-lens="terrain"] .n-num, #stage[data-lens="terrain"] .n-meta { display: none; }
 #stage[data-lens="terrain"] .node[aria-expanded="true"] { color: var(--summit); }
+#stage[data-lens="terrain"] .node[aria-expanded="true"] .n-tri { background: var(--summit); }
+#stage[aria-busy="true"] { cursor: progress; }
 
 /* Console: one row per node; the tree bars are in the SVG gutter */
 #stage[data-lens="console"] .node { display: grid; grid-template-columns: 5ch minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 0 14px 0 36px;
@@ -129,6 +133,16 @@
   .cl .gate-row > .mut { display: none; }
 }
 
+.ter-canvas { position: absolute; left: 0; top: 0; display: block; pointer-events: none; }
+.deco .trail { fill: none; stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; }
+.ter-legend { display: grid; gap: 8px; color: var(--ter-ink); }
+.ter-legend .lt { margin: 0; font-family: var(--body); font-size: 0.8125rem; line-height: 1.5; }
+.ter-legend .keys { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-family: var(--mono); font-size: 0.6875rem; color: var(--ter-muted); }
+.ter-legend .keys li { display: inline-flex; align-items: center; gap: 7px; }
+.ter-legend .keys svg { flex: none; overflow: visible; }
+.ter-legend .keys .trail { fill: none; stroke: var(--water); stroke-width: 2; }
+.ter-legend .mk { color: var(--ter-ink); font-weight: 600; }
+
 .ihead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; color: var(--ink); }
 .ihead h3 { font-size: 1.375rem; font-stretch: 82%; font-weight: 700; }
 
@@ -137,3 +151,42 @@
 .range-cell ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .range-cell li { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .range-cell .n { font-family: var(--mono); font-size: 0.875rem; font-weight: 600; color: var(--accent); }
+
+/* Plan extras: the language parts in the hub, balloon callouts, and the intro's assembly axes */
+.deco .part { transform-box: fill-box; transform-origin: center; }
+.deco .part-box { fill: var(--plan-ground); stroke: var(--plan-line); stroke-width: 1.5; }
+.deco .svg-part { font-family: var(--mono); font-size: 0.53125rem; letter-spacing: 0.02em; fill: var(--plan-ink); }
+.deco .cal-c { fill: var(--plan-ground); stroke: var(--s-line); stroke-width: 1.2; }
+.deco .cal-n { font-family: var(--mono); font-size: 0.59375rem; font-weight: 600; fill: var(--s-ink); }
+.deco .cal-t { font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.03em; fill: var(--s-ink); }
+.deco .ax { fill: none; stroke: var(--plan-muted); stroke-width: 1; stroke-dasharray: 14 4 2 4; }
+@media (max-width: 719px) {
+  .deco .cal-t { font-size: 0.55rem; letter-spacing: 0; }
+}
+
+/* Bill of materials: under the Plan drawing. Static rows without the island; buttons with it. */
+.bom { margin-top: 18px; font-family: var(--mono); color: var(--s-ink); background: var(--s-ground); border: 1.5px solid var(--s-line); }
+#stage.lensed:not([data-lens="plan"]) .bom { display: none; }
+.bom-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 8px 12px; border-bottom: 1.5px solid var(--s-line); }
+.bom-head h3 { font-family: var(--display); font-stretch: 80%; font-size: 1rem; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
+.bom-cols { font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--s-muted); }
+.bom-band + .bom-band { border-top: 1.5px solid var(--s-line); }
+.bom-band-h { margin: 0; padding: 8px 12px 4px; font-family: var(--mono); font-size: 0.625rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--s-muted); }
+.bom-list { list-style: none; margin: 0; padding: 0; }
+.bom-list li + li { border-top: 1px solid color-mix(in srgb, var(--s-line) 40%, transparent); }
+.bom-row { display: grid; grid-template-columns: 3ch minmax(7rem, 12rem) minmax(0, 1fr) auto; gap: 4px 14px; align-items: baseline; width: 100%; margin: 0; padding: 8px 12px;
+  border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.6875rem; line-height: 1.5; text-align: left; }
+button.bom-row { cursor: pointer; }
+button.bom-row:hover, button.bom-row[aria-expanded="true"] { background: color-mix(in srgb, var(--s-acc) 9%, var(--s-ground)); }
+button.bom-row[aria-expanded="true"] .mt { color: var(--s-acc); }
+button.bom-row:focus-visible { outline: 2px solid var(--s-acc); outline-offset: -2px; }
+.bom-row .pn { color: var(--s-muted); }
+.bom-row .mt { font-family: var(--display); font-stretch: 80%; font-weight: 700; font-size: 0.9375rem; text-transform: uppercase; letter-spacing: 0.03em; overflow-wrap: anywhere; }
+.bom-row .used { color: var(--s-muted); overflow-wrap: anywhere; }
+.bom-row .dm { display: inline-flex; gap: 3px; white-space: nowrap; }
+.bom-row .dm i { font-style: normal; border: 1px solid var(--s-line); padding: 0 4px; font-size: 0.625rem; }
+@media (max-width: 719px) {
+  .bom-row { grid-template-columns: 3ch minmax(0, 1fr) auto; }
+  .bom-row .used { grid-column: 2 / -1; }
+  .bom-cols { display: none; }
+}

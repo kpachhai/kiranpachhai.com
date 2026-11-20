@@ -6,9 +6,10 @@ import * as plan from '../../src/island/lenses/plan'
 import * as consoleLens from '../../src/island/lenses/console'
 import * as index from '../../src/island/lenses/index'
 import * as range from '../../src/island/lenses/range'
+import * as terrain from '../../src/island/lenses/terrain'
 
 const data = buildIslandData(model)
-const LENSES = { plan, console: consoleLens, index, range }
+const LENSES = { plan, terrain, console: consoleLens, index, range }
 const WIDTHS = [390, 720, 1280]
 const REM = [16, 32]
 
@@ -80,5 +81,14 @@ describe('plan revision table', () => {
       expect(row.items, row.id).toEqual(expected)
     }
     expect(JSON.stringify(rows)).not.toMatch(/HIP-?\d/)
+  })
+})
+
+describe('plan balloon callouts', () => {
+  it('name the first proof of each domain, in domain order, with no HIP number', () => {
+    const labels = plan.leadProofs(data)
+    expect(labels).toEqual(model.domains.map((domain) => model.proofs.find((proof) => proof.domainId === domain.id)!.label))
+    for (const label of labels) expect(label.length).toBeGreaterThan(0)
+    expect(labels.join(' ')).not.toMatch(/HIP-?\d/)
   })
 })

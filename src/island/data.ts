@@ -1,7 +1,7 @@
 // The slice of the content model the island needs, serialised once into the page by Stage.astro.
 // Only types cross from src/model, so zod and the full model never reach the browser bundle.
 import { STATUS_LABELS } from '../model/labels'
-import type { DomainId, MethodId, Model, ModeId } from '../model/schema'
+import type { DomainId, MethodId, Model, ModeId, Role } from '../model/schema'
 
 export interface IslandUpstream {
   label: string
@@ -33,6 +33,8 @@ export interface IslandData {
   materials: { id: string; name: string; band: string; usedIn: string[] }[]
   modes: { id: ModeId; name: string }[]
   range: { domainId: DomainId; mode: ModeId; proofIds: string[] }[]
+  // Titles only: the hero's role cycle needs nothing else, and titles carry no employer.
+  roles: Pick<Role, 'title'>[]
 }
 
 export const DATA_ELEMENT_ID = 'island-data'
@@ -57,6 +59,7 @@ export function buildIslandData(model: Model): IslandData {
     materials: model.materials.map(({ id, name, band, usedIn }) => ({ id, name, band, usedIn })),
     modes: model.modes.map(({ id, name }) => ({ id, name })),
     range: model.range.map(({ domainId, mode, proofIds }) => ({ domainId, mode, proofIds })),
+    roles: model.roles.map(({ title }) => ({ title })),
   }
 }
 
