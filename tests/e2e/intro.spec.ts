@@ -326,8 +326,8 @@ test.describe('role cycle', () => {
         if (overlay) cycleStart = Math.min(cycleStart, performance.now())
         if (text && seen[seen.length - 1] !== text) seen.push(text)
       }).observe(document, { subtree: true, childList: true, characterData: true })
-      // A role line that changed height would move the hero below it vertically. The web-font swap
-      // early in the load reflows text sideways only, so horizontal-only sources are left out.
+      // A role line that changed height would move the hero below it vertically, so horizontal-only
+      // sources are left out.
       type Source = { node?: Node; previousRect: DOMRectReadOnly; currentRect: DOMRectReadOnly }
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries() as (PerformanceEntry & { sources?: Source[] })[]) {
@@ -341,6 +341,9 @@ test.describe('role cycle', () => {
         }
       }).observe({ type: 'layout-shift', buffered: true })
     })
+    // A web font landing mid-cycle moves glyphs inside their line boxes, which would read as a shift
+    // the role line never caused. Fonts are blocked here; the hero's font independence has its own test.
+    await page.route('**/fonts/*.woff2', (route) => route.abort())
     const live: string[] = []
     await loaded(page)
     await page.exposeFunction('liveChanged', (text: string) => live.push(text))
@@ -380,6 +383,37 @@ test.describe('role cycle', () => {
     await page.waitForTimeout(200)
     await expect(page.locator('.role-cycle')).toHaveCount(0)
   })
+})
+
+// A web font that lands late (the italic is font-display optional, the rest swap) must not re-wrap
+// any hero line, or everything below it jumps on a slow first visit.
+test.describe('hero layout does not depend on the web fonts', () => {
+  const boxes = (page: Page) =>
+    page.evaluate(() =>
+      ['.name', '[data-role-box]', '.thesis', '.langs', '.jump'].map((selector) => {
+        const rect = document.querySelector(selector)!.getBoundingClientRect()
+        return `${selector} y${Math.round(rect.y)} h${Math.round(rect.height)}`
+      }),
+    )
+  for (const width of [390, 1280]) {
+    test(`at ${width} px the hero boxes match with fonts blocked and loaded`, async ({ browser }) => {
+      const readings: string[][] = []
+      for (const block of [true, false]) {
+        const context = await browser.newContext({ viewport: { width, height: 844 } })
+        await context.addInitScript(() => {
+          sessionStorage.setItem('kp-intro-seen', '1')
+          sessionStorage.setItem('kp-roles-seen', '1')
+        })
+        const page = await context.newPage()
+        if (block) await page.route('**/fonts/*.woff2', (route) => route.abort())
+        await loaded(page)
+        await page.evaluate(() => document.fonts.ready)
+        readings.push(await boxes(page))
+        await context.close()
+      }
+      expect(readings[0]).toEqual(readings[1])
+    })
+  }
 })
 
 test.describe('focus when Skip hides', () => {

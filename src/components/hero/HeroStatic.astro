@@ -161,7 +161,9 @@ const SECTIONS: [string, string][] = [
   @media (prefers-reduced-motion: reduce) {
     .roles-held { display: block; }
   }
-  .thesis { font-style: italic; color: var(--muted); }
+  /* 22em keeps the line count the same in every face: the italic needs 27.5em on one line and the
+     slanted-regular stand-in 31.4em, so both set as two lines and a late italic moves nothing. */
+  .intro .thesis { font-style: italic; color: var(--muted); max-width: 22em; text-wrap: balance; }
   .langs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
   .lang { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--rule); padding: 2px 8px; }
   .jump { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 0.75rem; padding-top: 12px; border-top: 1px solid var(--rule); }
