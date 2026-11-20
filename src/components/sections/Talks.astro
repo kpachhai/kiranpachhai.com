@@ -1,0 +1,40 @@
+---
+import { model, type Talk } from '../../model'
+
+const KIND_LABELS: Record<Talk['kind'], string> = {
+  talk: 'Talk',
+  workshop: 'Workshop',
+  session: 'Session',
+  course: 'Course',
+  tutorials: 'Tutorials',
+}
+const meta = (talk: Talk) => [KIND_LABELS[talk.kind], talk.date].filter(Boolean).join(' / ')
+---
+
+<section class="sec wrap" id="talks" aria-labelledby="talks-h">
+  <div class="sec-head"><h2 id="talks-h">Talks and teaching</h2></div>
+  <ul class="talks">
+    {
+      model.talks.map((talk) => (
+        <li>
+          <span class="k">{meta(talk)}</span>
+          <b>{talk.href ? <a href={talk.href}>{talk.title}</a> : talk.title}</b>
+          {talk.detail && <span class="d">{talk.detail}</span>}
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<style>
+  .talks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 32px; }
+  .talks li { padding-block: 14px; border-bottom: 1px solid var(--rule); display: grid; gap: 3px; min-width: 0; }
+  .talks b { font-family: var(--display); font-stretch: 82%; font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+  .talks b a { color: inherit; }
+  .talks b a:hover { color: var(--accent); }
+  .d { font-size: 0.95rem; color: var(--muted); }
+  .k { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  @media (max-width: 899px) {
+    .talks { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

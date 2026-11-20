@@ -1,54 +1,40 @@
 {
   "name": "kiranpachhai.com",
-  "version": "0.1.0",
-  "homepage": "https://kiranpachhai.com",
+  "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@emailjs/browser": "^3.6.2",
-    "@fortawesome/free-brands-svg-icons": "^6.1.1",
-    "@fortawesome/free-solid-svg-icons": "^6.1.1",
-    "@fortawesome/react-fontawesome": "^0.2.0",
-    "@testing-library/jest-dom": "^5.16.4",
-    "@testing-library/react": "^13.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "animate.css": "^4.1.1",
-    "loaders.css": "^0.1.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-leaflet": "^4.0.1",
-    "react-loaders": "^3.0.1",
-    "react-router-dom": "^6.3.0",
-    "react-scripts": "5.0.1",
-    "sass": "^1.53.0",
-    "web-vitals": "^2.1.4"
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
   },
   "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "gate:copy": "node scripts/gates/copy-scan.ts dist",
+    "data": "node --import ./scripts/gates/ts-resolve.mjs scripts/data/fetch-github.ts",
+    "gate:provenance": "node --import ./scripts/gates/ts-resolve.mjs scripts/gates/provenance.ts",
+    "gates": "npm run build && npm test"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "dependencies": {
+    "astro": "7.4.5",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "gh-pages": "^4.0.0"
+    "@astrojs/sitemap": "3.7.4",
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource-variable/martian-mono": "5.3.0",
+    "@fontsource-variable/newsreader": "5.3.0",
+    "@fontsource/bricolage-grotesque": "5.3.0",
+    "@fontsource/martian-mono": "5.3.0",
+    "@fontsource/newsreader": "5.3.0",
+    "@playwright/test": "1.63.0",
+    "@resvg/resvg-js": "2.6.2",
+    "@types/node": "22.20.5",
+    "satori": "0.63.2",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
   }
 }

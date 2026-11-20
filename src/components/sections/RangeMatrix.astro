@@ -1,0 +1,57 @@
+---
+import { model, type DomainId, type ModeId } from '../../model'
+import { proofById } from '../../lib/site'
+
+const cells = new Map(model.range.map((cell) => [`${cell.domainId}/${cell.mode}`, cell.proofIds.map(proofById)]))
+const cellProofs = (domainId: DomainId, mode: ModeId) => cells.get(`${domainId}/${mode}`) ?? []
+---
+
+<section class="sec wrap" id="range" aria-labelledby="range-h">
+  <div class="sec-head"><h2 id="range-h">Range</h2></div>
+  <p class="lede">Areas of work against modes of work. A filled cell lists its proof; an empty cell has none.</p>
+  <div class="scroller" tabindex="0" role="region" aria-labelledby="range-h">
+    <table class="matrix">
+      <caption class="sr-only">Areas of work by mode of work, with the proof for each pairing</caption>
+      <thead>
+        <tr>
+          <th scope="col">Area</th>
+          {model.modes.map((mode) => <th scope="col">{mode.name}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          model.domains.map((domain) => (
+            <tr>
+              <th scope="row">{domain.name}</th>
+              {model.modes.map((mode) => {
+                const proofs = cellProofs(domain.id, mode.id)
+                return (
+                  <td class={proofs.length > 0 ? 'on' : undefined}>
+                    {proofs.length > 0 && (
+                      <ul>
+                        {proofs.map((proof) => (
+                          <li>{proof.href ? <a href={proof.href}>{proof.label}</a> : proof.label}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .scroller { overflow-x: auto; }
+  .matrix { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; font-size: 0.85rem; line-height: 1.35; }
+  .matrix th { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--ink); }
+  .matrix tbody th { font-family: var(--display); font-stretch: 82%; font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: var(--ink); font-weight: 700; vertical-align: top; padding-top: 10px; border-bottom: 1px solid var(--rule); width: 13rem; }
+  .matrix thead th:first-child { width: 13rem; }
+  .matrix td { vertical-align: top; padding: 10px 10px 10px 0; border-bottom: 1px solid var(--rule); }
+  .matrix td.on { background: color-mix(in srgb, var(--accent) 6%, transparent); padding-left: 8px; }
+  .matrix ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+</style>

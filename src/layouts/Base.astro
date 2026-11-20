@@ -1,0 +1,60 @@
+---
+import '../styles/global.css'
+import Footer from '../components/sections/Footer.astro'
+
+interface Props {
+  title: string
+  description: string
+  path: string
+  ogImage: string
+  canonical?: string
+  noindex?: boolean
+  jsonLd?: Record<string, unknown>
+}
+
+const { title, description, path, ogImage, noindex = false, jsonLd } = Astro.props
+const canonical = new URL(Astro.props.canonical ?? path, Astro.site).href
+const image = new URL(ogImage, Astro.site).href
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>
+      // Before first paint: mark JS as present and apply a stored theme. Storage can throw.
+      ;(function () {
+        var root = document.documentElement
+        root.classList.add('js')
+        try {
+          var theme = window.localStorage.getItem('kp-theme')
+          if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+        } catch (error) {}
+      })()
+    </script>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    {noindex && <meta name="robots" content="noindex" />}
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+    <link
+      rel="preload"
+      href="/fonts/bricolage-grotesque-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+    <Footer />
+  </body>
+</html>

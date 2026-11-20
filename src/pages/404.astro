@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro'
+import { OG_DEFAULT } from '../lib/site'
+---
+
+<Base title="Page not found" description="This address is not on kiranpachhai.com." path="/404.html" ogImage={OG_DEFAULT}>
+  <main class="wrap missing">
+    <span class="eyebrow">404</span>
+    <h1>Page not found</h1>
+    <p>This address is not on the site. Older pages now live as sections of the home page.</p>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/#work">Selected work</a></li>
+      <li><a href="/#timeline">Timeline</a></li>
+      <li><a href="/#talks">Talks and teaching</a></li>
+    </ul>
+  </main>
+</Base>
+
+<style>
+  .missing { padding-block: 64px 0; }
+  h1 { font-size: clamp(2.4rem, 8vw, 4.4rem); line-height: 0.95; font-weight: 750; font-stretch: 82%; margin: 10px 0 16px; }
+  p { margin: 0 0 18px; max-width: 52ch; }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 20px; font-family: var(--mono); font-size: 0.8rem; }
+</style>

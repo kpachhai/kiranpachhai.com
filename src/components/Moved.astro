@@ -1,0 +1,30 @@
+---
+// Static stand-in for an old client route: meta refresh plus a visible link for when refresh is off.
+import Base from '../layouts/Base.astro'
+import { OG_DEFAULT } from '../lib/site'
+
+interface Props {
+  path: string
+  target: string
+  title: string
+  message: string
+  linkText: string
+}
+
+const { path, target, title, message, linkText } = Astro.props
+---
+
+<Base title={title} description={message} path={path} ogImage={OG_DEFAULT} canonical={target} noindex>
+  <meta slot="head" http-equiv="refresh" content={`0; url=${target}`} />
+  <main class="wrap moved">
+    <h1>{title}</h1>
+    <p>{message}</p>
+    <p><a href={target}>{linkText}</a></p>
+  </main>
+</Base>
+
+<style>
+  .moved { padding-block: 64px 0; }
+  h1 { font-size: clamp(2rem, 6vw, 3.4rem); font-weight: 750; font-stretch: 82%; margin-bottom: 16px; }
+  p { margin: 0 0 12px; max-width: 52ch; }
+</style>

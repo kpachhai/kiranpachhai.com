@@ -1,0 +1,46 @@
+---
+import { model } from '../../model'
+import { domainName, methodName, proofById } from '../../lib/site'
+---
+
+<section class="sec wrap" id="work" aria-labelledby="work-h">
+  <div class="sec-head"><h2 id="work-h">Selected work</h2></div>
+  <p class="lede">Six case studies, each as problem, approach, methods and outcome.</p>
+  <ul class="cases">
+    {
+      model.caseStudies.map((study) => {
+        const lead = proofById(study.proofIds[0])
+        return (
+          <li class="case">
+            <span class="dom">{domainName(lead.domainId)}</span>
+            <h3><a href={`/work/${study.slug}/`}>{study.title}</a></h3>
+            <p>{study.problem.text}</p>
+            {lead.methods.length > 0 && (
+              <ul class="mth" aria-label="Methods">
+                {lead.methods.map((id) => (
+                  <li title={methodName(id)}>
+                    {id}
+                    <span class="sr-only">, {methodName(id)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        )
+      })
+    }
+  </ul>
+</section>
+
+<style>
+  .cases { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 22px; }
+  .case { display: grid; gap: 10px; align-content: start; min-width: 0; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .dom { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .case h3 { font-size: 1.5rem; font-weight: 700; font-stretch: 82%; line-height: 1.08; }
+  .case h3 a { color: inherit; }
+  .case h3 a:hover { color: var(--accent); }
+  .case p { margin: 0; font-size: 0.97rem; line-height: 1.42; }
+  @media (max-width: 899px) {
+    .cases { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

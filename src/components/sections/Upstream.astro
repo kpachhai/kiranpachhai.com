@@ -1,0 +1,90 @@
+---
+import { model, type Upstream } from '../../model'
+import { github } from '../../lib/site'
+import { STATUS_LABELS } from '../../model/labels'
+
+const COUNTS: [keyof typeof github.counts, string][] = [
+  ['prsAuthored', 'pull requests authored'],
+  ['prsReviewed', 'pull requests reviewed'],
+  ['issues', 'issues opened'],
+  ['commented', 'threads commented on'],
+]
+
+// One row per contribution; a repo with several statuses under one label shows several chips.
+type Row = { label: string; href: string; statuses: Upstream['status'][] }
+function rowsFor(entries: Upstream[]): Row[] {
+  const rows: Row[] = []
+  for (const entry of entries) {
+    const existing = rows.find((row) => row.label === entry.label && row.href === entry.href)
+    if (existing) existing.statuses.push(entry.status)
+    else rows.push({ label: entry.label, href: entry.href, statuses: [entry.status] })
+  }
+  return rows
+}
+
+const groups = model.domains
+  .map((domain) => ({ domain, rows: rowsFor(github.ledger.filter((entry) => entry.domainId === domain.id)) }))
+  .filter((group) => group.rows.length > 0)
+---
+
+<section class="sec wrap" id="upstream" aria-labelledby="up-h">
+  <div class="sec-head"><h2 id="up-h">Upstream</h2></div>
+  <p class="lede">
+    Public work in other people's repositories, grouped by area. Counts exclude my own repositories, as of {github.asOf}.
+  </p>
+  <dl class="totals">
+    {
+      COUNTS.map(([key, label]) => (
+        <div data-count={key}>
+          <dt>{label}</dt>
+          <dd>{github.counts[key]}</dd>
+        </div>
+      ))
+    }
+  </dl>
+  <table class="ledger">
+    <caption class="sr-only">Contributions to other repositories by area, with their status</caption>
+    <thead>
+      <tr><th scope="col">Contribution</th><th scope="col">Status</th></tr>
+    </thead>
+    {
+      groups.map((group) => (
+        <tbody>
+          <tr class="grp">
+            <th scope="colgroup" colspan="2">{group.domain.name}</th>
+          </tr>
+          {group.rows.map((row) => (
+            <tr>
+              <td><a href={row.href}>{row.label}</a></td>
+              <td>
+                <span class="chips">
+                  {row.statuses.map((status) => (
+                    <span class={`st-chip ${status}`}>{STATUS_LABELS[status]}</span>
+                  ))}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      ))
+    }
+  </table>
+</section>
+
+<style>
+  .totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--ink); margin: 0 0 20px; }
+  .totals div { padding: 12px 14px; border-left: 1px solid var(--rule); display: flex; flex-direction: column-reverse; justify-content: flex-end; }
+  .totals div:first-child { border-left: 0; }
+  .totals dd { margin: 0; font-family: var(--display); font-stretch: 82%; font-size: 1.9rem; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; }
+  .totals dt { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; }
+  .ledger { width: 100%; border-collapse: collapse; font-size: 0.97rem; }
+  .ledger thead th { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--ink); }
+  .ledger td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  .grp th { text-align: left; font-family: var(--display); font-stretch: 82%; font-weight: 700; font-size: 1.125rem; padding: 18px 0 6px; border-bottom: 1px solid var(--ink); }
+  .chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  @media (max-width: 899px) {
+    .totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .totals div:nth-child(3) { border-left: 0; }
+    .totals div:nth-child(n + 3) { border-top: 1px solid var(--rule); }
+  }
+</style>

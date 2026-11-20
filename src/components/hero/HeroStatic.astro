@@ -1,0 +1,88 @@
+---
+// The no-JS hero: identity plus the Index lens of the capability map. The island mounts on #stage later.
+import { model } from '../../model'
+import { languages, proofsInDomain } from '../../lib/site'
+
+const SECTIONS: [string, string][] = [
+  ['#work', 'Selected work'],
+  ['#methods', 'How I work'],
+  ['#range', 'Range'],
+  ['#timeline', 'Timeline'],
+  ['#upstream', 'Upstream'],
+  ['#talks', 'Talks and teaching'],
+]
+---
+
+<header class="hero wrap">
+  <h1 class="name">{model.hero.name}<span class="dot" aria-hidden="true">.</span></h1>
+  <div class="intro">
+    <p class="role">{model.hero.roleLine}</p>
+    <p class="thesis">{model.hero.thesis}</p>
+    <p class="langs">
+      <span class="eyebrow">Languages</span>
+      {languages.map((name) => <span class="lang">{name}</span>)}
+    </p>
+  </div>
+  <nav class="jump" aria-label="Sections">
+    {SECTIONS.map(([href, label]) => <a href={href}>{label}</a>)}
+  </nav>
+</header>
+
+<section id="stage" class="stage" data-lens="index" aria-labelledby="stage-h">
+  <div class="wrap">
+    <h2 id="stage-h" class="sr-only">Areas of work and their proof</h2>
+    <ol class="index">
+      {
+        model.domains.map((domain, position) => {
+          const proofs = proofsInDomain(domain.id)
+          return (
+            <li class="entry" data-domain={domain.id}>
+              <h3 class="entry-name">
+                <span class="num" aria-hidden="true">{String(position + 1).padStart(2, '0')}</span>
+                {domain.name}
+              </h3>
+              <ul class="proofs">
+                {proofs.map((proof) => (
+                  <li>
+                    {proof.href ? <a href={proof.href}>{proof.label}</a> : <span class="label">{proof.label}</span>}
+                    <span class="detail">{proof.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          )
+        })
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 48px; align-items: end; padding-block: 40px 16px; }
+  .name { font-size: clamp(2.6rem, 7vw, 5rem); line-height: 0.92; font-weight: 750; font-stretch: 82%; letter-spacing: 0.005em; }
+  .dot { color: var(--accent); }
+  .intro p { margin: 0 0 12px; max-width: 46ch; }
+  .role { font-size: 1.1rem; }
+  .thesis { font-style: italic; color: var(--muted); }
+  .langs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+  .lang { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--rule); padding: 2px 8px; }
+  .jump { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 0.75rem; padding-top: 12px; border-top: 1px solid var(--rule); }
+  .stage { background: var(--s-ground); color: var(--s-ink); padding-block: 24px 32px; border-block: 1px solid var(--rule); }
+  .index { list-style: none; margin: 0; padding: 0; }
+  .entry { padding-block: 18px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 32px; }
+  .entry:last-child { border-bottom: 0; }
+  .entry-name { font-size: 2.75rem; line-height: 1.02; font-weight: 700; font-stretch: 82%; letter-spacing: 0.004em; }
+  .num { display: block; font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; color: var(--s-muted); margin-bottom: 6px; }
+  .proofs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-family: var(--body); }
+  .proofs li { display: grid; gap: 2px; }
+  .proofs a, .label { font-weight: 600; color: var(--s-acc); }
+  .label { color: var(--s-ink); }
+  .detail { font-size: 0.95rem; color: var(--s-muted); line-height: 1.4; }
+  @media (max-width: 899px) {
+    .hero { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 719px) {
+    .entry { grid-template-columns: minmax(0, 1fr); }
+    .entry-name { font-size: 1.6875rem; }
+  }
+</style>

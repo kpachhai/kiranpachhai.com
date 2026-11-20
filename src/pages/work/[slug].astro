@@ -1,0 +1,100 @@
+---
+import type { GetStaticPaths } from 'astro'
+import Base from '../../layouts/Base.astro'
+import { model, type CaseStudy } from '../../model'
+import { domainName, methodName, proofById } from '../../lib/site'
+
+export const getStaticPaths = (() =>
+  model.caseStudies.map((study) => ({ params: { slug: study.slug }, props: { study } }))) satisfies GetStaticPaths
+
+interface Props {
+  study: CaseStudy
+}
+
+const { study } = Astro.props
+const proofs = study.proofIds.map(proofById)
+const lead = proofs[0]
+const methodIds = [...new Set(proofs.flatMap((proof) => proof.methods))]
+const SECTIONS = [
+  ['Problem', study.problem],
+  ['Approach', study.approach],
+] as const
+---
+
+<Base title={`${study.title} | ${model.hero.name}`} description={study.problem.text} path={`/work/${study.slug}/`} ogImage={`/og/${study.slug}.png`}>
+  <main class="wrap case">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/">{model.hero.name}</a>
+      <span aria-hidden="true">/</span>
+      <a href="/#work">Selected work</a>
+    </nav>
+    <header class="head">
+      <span class="eyebrow">{domainName(lead.domainId)}</span>
+      <h1>{study.title}</h1>
+      <p class="lead">{lead.detail}</p>
+    </header>
+    <div class="body">
+      {
+        SECTIONS.map(([heading, field]) => (
+          <section>
+            <h2>{heading}</h2>
+            <p>{field.text}</p>
+          </section>
+        ))
+      }
+      <section>
+        <h2>Methods</h2>
+        {
+          methodIds.length > 0 && (
+            <ul class="named">
+              {methodIds.map((id) => (
+                <li>
+                  <span class="letter" aria-hidden="true">{id}</span>
+                  {methodName(id)}
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        <p>{study.methods.text}</p>
+      </section>
+      <section>
+        <h2>Outcome</h2>
+        <p>{study.outcome.text}</p>
+      </section>
+      <section>
+        <h2>Proof</h2>
+        <ul class="proof">
+          {
+            proofs.map((proof) => (
+              <li>
+                {proof.href ? <a href={proof.href}>{proof.label}</a> : <span>{proof.label}</span>}
+                {proof.private && <span class="note">Private repository</span>}
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </div>
+  </main>
+</Base>
+
+<style>
+  .case { padding-block: 32px 0; }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 6px 10px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+  .head { border-bottom: 1px solid var(--ink); padding-block: 28px 18px; margin-bottom: 8px; }
+  h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 0.98; font-weight: 750; font-stretch: 82%; margin: 10px 0 14px; }
+  .lead { font-size: 1.2rem; margin: 0; max-width: 52ch; }
+  .body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 40px; }
+  .body section { min-width: 0; }
+  h2 { font-family: var(--mono); font-weight: 500; font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .body p { margin: 0 0 10px; max-width: 60ch; }
+  .named { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .named li { display: inline-flex; align-items: center; gap: 6px; }
+  .letter { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 0.7rem; font-weight: 600; }
+  .proof { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-family: var(--mono); font-size: 0.8rem; }
+  .note { color: var(--muted); margin-left: 10px; }
+  @media (max-width: 719px) {
+    .body { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

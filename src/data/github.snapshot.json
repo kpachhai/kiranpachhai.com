@@ -1,0 +1,177 @@
+{
+  "asOf": "2026-11-19",
+  "counts": {
+    "prsAuthored": 61,
+    "prsReviewed": 178,
+    "issues": 632,
+    "commented": 462
+  },
+  "ledger": [
+    {
+      "label": "JSON-RPC relay debug APIs",
+      "href": "https://github.com/hiero-ledger/hiero-json-rpc-relay",
+      "status": "merged",
+      "domainId": "protocol"
+    },
+    {
+      "label": "JSON-RPC relay debug APIs",
+      "href": "https://github.com/hiero-ledger/hiero-json-rpc-relay",
+      "status": "review",
+      "domainId": "protocol"
+    },
+    {
+      "label": "JSON-RPC relay debug APIs",
+      "href": "https://github.com/hiero-ledger/hiero-json-rpc-relay",
+      "status": "commits",
+      "domainId": "protocol"
+    },
+    {
+      "label": "Developer documentation tutorials",
+      "href": "https://github.com/hashgraph/hedera-docs",
+      "status": "merged",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer documentation tutorials",
+      "href": "https://github.com/hashgraph/hedera-docs",
+      "status": "review",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer documentation tutorials",
+      "href": "https://github.com/hashgraph/hedera-docs",
+      "status": "commits",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer code snippets",
+      "href": "https://github.com/hedera-dev/hedera-code-snippets",
+      "status": "merged",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer code snippets",
+      "href": "https://github.com/hedera-dev/hedera-code-snippets",
+      "status": "commits",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer skills plugins",
+      "href": "https://github.com/hedera-dev/hedera-skills",
+      "status": "merged",
+      "domainId": "agents"
+    },
+    {
+      "label": "Developer skills plugins",
+      "href": "https://github.com/hedera-dev/hedera-skills",
+      "status": "commits",
+      "domainId": "agents"
+    },
+    {
+      "label": "Wallet snap reviews and fixes",
+      "href": "https://github.com/hashgraph/hedera-metamask-snaps",
+      "status": "merged",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Wallet snap reviews and fixes",
+      "href": "https://github.com/hashgraph/hedera-metamask-snaps",
+      "status": "review",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Wallet snap reviews and fixes",
+      "href": "https://github.com/hashgraph/hedera-metamask-snaps",
+      "status": "commits",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Identity wallet snap",
+      "href": "https://github.com/tuum-tech/identify",
+      "status": "merged",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Identity wallet snap",
+      "href": "https://github.com/tuum-tech/identify",
+      "status": "review",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Identity wallet snap",
+      "href": "https://github.com/tuum-tech/identify",
+      "status": "commits",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Cross-chain messaging demos",
+      "href": "https://github.com/mgarbs/hedera-ccip-demos",
+      "status": "merged",
+      "domainId": "chains"
+    },
+    {
+      "label": "Cross-chain messaging demos",
+      "href": "https://github.com/mgarbs/hedera-ccip-demos",
+      "status": "commits",
+      "domainId": "chains"
+    },
+    {
+      "label": "Cross-ledger explainer site",
+      "href": "https://github.com/danielmarv/clpr-website",
+      "status": "merged",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Cross-ledger explainer site",
+      "href": "https://github.com/danielmarv/clpr-website",
+      "status": "commits",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Cross-ledger project site",
+      "href": "https://github.com/LFDT-CLPR/clpr-website",
+      "status": "open",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Cross-ledger project site",
+      "href": "https://github.com/LFDT-CLPR/clpr-website",
+      "status": "commits",
+      "domainId": "explainers"
+    },
+    {
+      "label": "HyperVM SDK discussions",
+      "href": "https://github.com/ava-labs/hypersdk",
+      "status": "discussion",
+      "domainId": "protocol"
+    },
+    {
+      "label": "Snaps platform discussions",
+      "href": "https://github.com/MetaMask/snaps",
+      "status": "discussion",
+      "domainId": "wallets"
+    },
+    {
+      "label": "Developer documentation pages",
+      "href": "https://github.com/elastos/Elastos.Developer.Website",
+      "status": "merged",
+      "domainId": "explainers"
+    },
+    {
+      "label": "Developer documentation pages",
+      "href": "https://github.com/elastos/Elastos.Developer.Website",
+      "status": "commits",
+      "domainId": "explainers"
+    }
+  ],
+  "commitsByYear": {
+    "2019": 81,
+    "2020": 205,
+    "2021": 406,
+    "2022": 379,
+    "2023": 224,
+    "2024": 365,
+    "2025": 59,
+    "2026": 77
+  }
+}

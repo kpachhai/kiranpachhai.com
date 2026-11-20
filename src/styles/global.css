@@ -1,0 +1,66 @@
+@import './tokens.css';
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/bricolage-grotesque-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('/fonts/newsreader-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: "Martian Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/martian-mono-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; margin: 0; }
+
+a { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* Shared page furniture for the static sections. */
+a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+.eyebrow { font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sec { padding-block: 56px 8px; scroll-margin-top: 24px; }
+.sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; border-bottom: 1px solid var(--ink); padding-bottom: 10px; margin-bottom: 22px; }
+.sec-head h2 { font-size: clamp(1.9rem, 4.6vw, 3rem); line-height: 1; font-weight: 720; font-stretch: 82%; }
+.lede { margin: -6px 0 22px; font-size: 1rem; color: var(--muted); max-width: 70ch; }
+.mth { display: inline-flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.mth li { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 0.65rem; font-weight: 600; }
+.st-chip { font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid currentColor; padding: 1px 6px; color: var(--muted); white-space: nowrap; }
+.st-chip.merged { color: var(--accent); }
+.st-chip.open { color: var(--ink); border-style: dashed; }
+.st-chip.discussion { border-style: dotted; }
+.st-chip.commits { border-color: transparent; background: var(--panel); }

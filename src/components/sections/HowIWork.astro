@@ -1,0 +1,46 @@
+---
+import { model } from '../../model'
+
+const pipeline = model.methods.map((method) => ({
+  ...method,
+  proofs: model.proofs.filter((proof) => proof.methods.includes(method.id)),
+}))
+---
+
+<section class="sec wrap" id="methods" aria-labelledby="methods-h">
+  <div class="sec-head"><h2 id="methods-h">How I work</h2></div>
+  <p class="lede">Five methods, each with the projects that use it.</p>
+  <ol class="pipe">
+    {
+      pipeline.map((method) => (
+        <li>
+          <span class="gl" aria-hidden="true">{method.id}</span>
+          <h3>{method.name}</h3>
+          {method.summary && <p>{method.summary}</p>}
+          <ul class="used">
+            {method.proofs.map((proof) => (
+              <li>{proof.label}</li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ol>
+</section>
+
+<style>
+  .pipe { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: relative; }
+  .pipe::before { content: ""; position: absolute; left: 0; right: 0; top: 19px; border-top: 1.5px solid var(--s-line); }
+  .pipe > li { position: relative; padding: 0 14px 0 0; min-width: 0; display: grid; gap: 8px; align-content: start; }
+  .gl { display: inline-grid; place-items: center; width: 38px; height: 38px; background: var(--paper); border: 1.5px solid var(--s-line); font-family: var(--display); font-stretch: 80%; font-weight: 750; font-size: 1.125rem; }
+  h3 { font-size: 1.3rem; font-weight: 700; font-stretch: 82%; line-height: 1.1; }
+  p { margin: 0; font-size: 0.97rem; }
+  .used { margin: 0; padding-left: 16px; font-family: var(--mono); font-size: 0.72rem; line-height: 1.7; color: var(--muted); }
+  @media (max-width: 899px) {
+    .pipe { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+    .pipe::before { left: 19px; right: auto; top: 0; bottom: 0; border-top: 0; border-left: 1.5px solid var(--s-line); }
+    .pipe > li { padding: 0 0 0 52px; }
+    .gl { position: absolute; left: 0; top: 0; }
+    h3 { min-height: 38px; display: flex; align-items: center; }
+  }
+</style>

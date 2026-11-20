@@ -1,0 +1,94 @@
+---
+import { model } from '../../model'
+import { github } from '../../lib/site'
+
+// Positions on a shared year axis; "to now" ends at the GitHub data date.
+const FIRST_YEAR = 2010
+const asOf = new Date(`${github.asOf}T00:00:00Z`)
+const now = asOf.getUTCFullYear() + asOf.getUTCMonth() / 12
+const lastYear = asOf.getUTCFullYear() + 1
+const percent = (year: number) => `${(((year - FIRST_YEAR) / (lastYear - FIRST_YEAR)) * 100).toFixed(2)}%`
+
+function span(years: string): { start: number; end: number } {
+  const found = years.match(/\d{4}/g)
+  if (!found) throw new Error(`timeline years without a year: ${years}`)
+  const start = Number(found[0])
+  const end = /now/.test(years) ? now : Number(found[1] ?? found[0])
+  return { start, end: Math.max(end, start + 0.25) }
+}
+
+const rows = model.timeline.map((entry) => {
+  const { start, end } = span(entry.years)
+  return { ...entry, left: percent(start), width: `${(((end - start) / (lastYear - FIRST_YEAR)) * 100).toFixed(2)}%` }
+})
+
+const commitYears = Object.entries(github.commitsByYear).map(([year, count]) => ({ year: Number(year), count }))
+const maxCommits = Math.max(1, ...commitYears.map((entry) => entry.count))
+const ticks = Array.from({ length: Math.floor((lastYear - FIRST_YEAR) / 2) + 1 }, (_, index) => FIRST_YEAR + index * 2)
+---
+
+<section class="sec wrap" id="timeline" aria-labelledby="tl-h">
+  <div class="sec-head"><h2 id="tl-h">Timeline</h2><span class="eyebrow">{FIRST_YEAR} to now, to scale</span></div>
+  <ol class="tl">
+    {
+      rows.map((row) => (
+        <li class:list={['tl-row', { edu: row.kind === 'education' }]}>
+          <div class="who">
+            <b>{row.title}</b>
+            <span class="yr">{row.years}</span>
+          </div>
+          <div class="track" aria-hidden="true">
+            <span class="bar" style={`left:${row.left};width:${row.width}`} />
+          </div>
+        </li>
+      ))
+    }
+  </ol>
+  <div class="density">
+    <p class="lbl" id="dens-h">Public commits to other people's repositories, per year</p>
+    <ol class="dens" aria-labelledby="dens-h">
+      {
+        commitYears.map((entry) => (
+          <li style={`left:${percent(entry.year + 0.5)};height:${Math.round((entry.count / maxCommits) * 100)}%`}>
+            <span class="sr-only">
+              {entry.year}: {entry.count}
+            </span>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+  <div class="axis" aria-hidden="true">
+    <div></div>
+    <div class="ticks">{ticks.map((year) => <span style={`left:${percent(year)}`}>{year}</span>)}</div>
+  </div>
+  <p class="src">Solid bars are roles; outlined bars are degrees.</p>
+</section>
+
+<style>
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl-row { display: grid; grid-template-columns: minmax(0, 19rem) minmax(0, 1fr); gap: 4px 24px; align-items: center; padding-block: 8px; border-bottom: 1px solid var(--rule); }
+  .who { font-size: 0.95rem; line-height: 1.3; }
+  .who b { font-family: var(--display); font-stretch: 82%; font-weight: 700; font-size: 1.05rem; display: block; }
+  .edu .who b { font-weight: 600; }
+  .yr { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); }
+  .track { position: relative; height: 14px; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 6px; border-top: 1px dashed var(--rule); }
+  .bar { position: absolute; top: 2px; height: 10px; background: var(--s-acc); min-width: 6px; }
+  .edu .bar { background: transparent; border: 1.5px solid var(--s-acc); }
+  .density, .axis { display: grid; grid-template-columns: minmax(0, 19rem) minmax(0, 1fr); gap: 4px 24px; }
+  .density { align-items: end; padding-top: 14px; }
+  .lbl { margin: 0; font-family: var(--mono); font-size: 0.65rem; color: var(--muted); line-height: 1.4; }
+  .dens { list-style: none; margin: 0; padding: 0; position: relative; height: 46px; border-bottom: 1px solid var(--rule); }
+  .dens li { position: absolute; bottom: 0; width: 3.2%; transform: translateX(-50%); background: color-mix(in srgb, var(--s-line) 12%, transparent); border: 1px solid color-mix(in srgb, var(--s-line) 45%, transparent); border-bottom: 0; }
+  .axis { padding-top: 6px; }
+  .ticks { position: relative; height: 18px; font-family: var(--mono); font-size: 0.65rem; color: var(--muted); }
+  .ticks span { position: absolute; transform: translateX(-50%); }
+  .ticks span:first-child { transform: none; }
+  .src { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); margin: 10px 0 0; }
+  @media (max-width: 719px) {
+    .tl-row, .density, .axis { grid-template-columns: minmax(0, 1fr); }
+    .axis > :first-child { display: none; }
+    .ticks span:nth-child(even) { display: none; }
+  }
+</style>
