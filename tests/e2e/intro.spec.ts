@@ -385,9 +385,10 @@ test.describe('role cycle', () => {
   })
 })
 
-// A web font that lands late (the italic is font-display optional, the rest swap) must not re-wrap
-// any hero line, or everything below it jumps on a slow first visit.
-test.describe('hero layout does not depend on the web fonts', () => {
+// The thesis italic is font-display optional, so a slow first visit may set the thesis in the
+// slanted-regular stand-in and swap the italic in later. Either face must wrap the same, or the
+// hero below it jumps.
+test.describe('hero layout does not depend on the thesis italic', () => {
   const boxes = (page: Page) =>
     page.evaluate(() =>
       ['.name', '[data-role-box]', '.thesis', '.langs', '.jump'].map((selector) => {
@@ -396,7 +397,7 @@ test.describe('hero layout does not depend on the web fonts', () => {
       }),
     )
   for (const width of [390, 1280]) {
-    test(`at ${width} px the hero boxes match with fonts blocked and loaded`, async ({ browser }) => {
+    test(`at ${width} px the hero boxes match with the italic blocked and loaded`, async ({ browser }) => {
       const readings: string[][] = []
       for (const block of [true, false]) {
         const context = await browser.newContext({ viewport: { width, height: 844 } })
@@ -405,7 +406,7 @@ test.describe('hero layout does not depend on the web fonts', () => {
           sessionStorage.setItem('kp-roles-seen', '1')
         })
         const page = await context.newPage()
-        if (block) await page.route('**/fonts/*.woff2', (route) => route.abort())
+        if (block) await page.route('**/fonts/*thesis*.woff2', (route) => route.abort())
         await loaded(page)
         await page.evaluate(() => document.fonts.ready)
         readings.push(await boxes(page))
