@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><script>
+      // Before first paint: mark JS as present and apply a stored theme and provenance choice. Storage can throw.
+      // If a module script fails to load (blocked, offline), the page falls back to its no-JS view, so
+      // no control is left on screen without the code behind it.
+      ;(function () {
+        var root = document.documentElement
+        root.classList.add('js')
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target
+            if (target && target.tagName === 'SCRIPT' && target.type === 'module') root.classList.remove('js')
+          },
+          true,
+        )
+        try {
+          var theme = window.localStorage.getItem('kp-theme')
+          if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+          if (window.localStorage.getItem('kp-provenance') === 'on') root.setAttribute('data-provenance', 'on')
+          // The hero's role cycle plays once a session; after that the roles are listed as text.
+          if (window.sessionStorage.getItem('kp-roles-seen') === '1') root.setAttribute('data-roles-seen', '')
+        } catch (error) {}
+      })()
+    </script><title>Portfolio moved</title><meta name="description" content="The portfolio is now the selected work on the home page."><link rel="canonical" href="https://kiranpachhai.com/#work"><meta property="og:title" content="Portfolio moved"><meta property="og:description" content="The portfolio is now the selected work on the home page."><meta property="og:url" content="https://kiranpachhai.com/#work"><meta property="og:image" content="https://kiranpachhai.com/og/default.png"><meta property="og:type" content="website"><meta property="og:site_name" content="Kiran Pachhai"><meta property="og:locale" content="en_US"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://kiranpachhai.com/og/default.png"><meta name="robots" content="noindex"><link rel="preload" href="/fonts/bricolage-grotesque-latin-wght-wdth82-normal.woff2" as="font" type="font/woff2" crossorigin><meta http-equiv="refresh" content="0; url=/#work"><script nomodule>document.documentElement.classList.remove('js')</script><link rel="stylesheet" href="/_astro/Base.BmYDsi1B.css"><style>.moved[data-astro-cid-adt7wufv]{padding-block:64px 0}h1[data-astro-cid-adt7wufv]{margin-bottom:16px;font-size:clamp(2rem,6vw,3.4rem);font-weight:750;font-stretch:82%}p[data-astro-cid-adt7wufv]{max-width:52ch;margin:0 0 12px}
+</style></head><body><main class="wrap moved" data-astro-cid-adt7wufv><h1 data-astro-cid-adt7wufv>Portfolio moved</h1><p data-astro-cid-adt7wufv>The portfolio is now the selected work on the home page.</p><p data-astro-cid-adt7wufv><a href="/#work" data-astro-cid-adt7wufv>Go to selected work</a></p></main><footer class="site-footer" data-astro-cid-yvkg62gd><div class="wrap" data-astro-cid-yvkg62gd><span data-astro-cid-yvkg62gd>Kiran Pachhai</span><nav aria-label="Elsewhere" data-astro-cid-yvkg62gd><a href="https://github.com/kpachhai" data-astro-cid-yvkg62gd>GitHub</a><a href="https://www.linkedin.com/in/kiranpachhai" data-astro-cid-yvkg62gd>LinkedIn</a><a href="https://www.youtube.com/channel/UCu1XxDJE84ZvgLJ-EssbveA" data-astro-cid-yvkg62gd>YouTube</a><a href="https://twitter.com/mr_pachhai" data-astro-cid-yvkg62gd>X</a></nav><p class="gates" data-astro-cid-yvkg62gd>Passed 8 of 8 gates on <time datetime="2026-11-21" data-astro-cid-yvkg62gd>2026-11-21</time></p><div class="settings" role="group" aria-label="Settings" data-astro-cid-yvkg62gd><button type="button" data-theme-control data-astro-cid-yvkg62gd>Theme: system</button><button type="button" data-shortcuts-control aria-pressed="true" data-astro-cid-yvkg62gd>Keyboard shortcuts</button></div></div></footer><script type="module" src="/_astro/Footer.astro_astro_type_script_index_0_lang.DvP7oEdY.js"></script></body></html>
