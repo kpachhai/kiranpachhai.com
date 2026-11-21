@@ -187,18 +187,27 @@ test.describe('sheet content', () => {
   })
 
   // A modified click is the reader asking for the link itself (a new tab or window), so the
-  // readout leaves it alone.
-  test('a Ctrl, Cmd or Shift click on a summit follows the link and leaves the readout at rest', async ({ page, context }) => {
+  // readout leaves it alone. Whether a browser then opens a tab differs by platform (headless
+  // Chromium on Linux opens none for a same-page link), so the test checks the site's part: the
+  // click reaches the window unprevented. The window listener then cancels it, so the test page
+  // stays where it is.
+  test('a Ctrl, Cmd or Shift click on a summit is left to the browser and the readout stays at rest', async ({ page }) => {
     await ready(page)
+    await page.evaluate(() => {
+      const prevented: boolean[] = []
+      ;(window as unknown as { modifiedClicks: boolean[] }).modifiedClicks = prevented
+      window.addEventListener('click', (event) => {
+        prevented.push(event.defaultPrevented)
+        event.preventDefault()
+      })
+    })
     const summit = page.locator(`#sheet a.summit[data-summit="${model.domains[0].id}"]`)
     for (const modifier of ['ControlOrMeta', 'Shift'] as const) {
-      const opened = context.waitForEvent('page')
       await summit.click({ modifiers: [modifier] })
-      const other = await opened
-      await other.close()
       await expect(page.locator('#readout .ro-cmd'), modifier).toHaveText('$ kp map')
       await expect(page.locator('#sheet a.summit[aria-current]'), modifier).toHaveCount(0)
     }
+    expect(await page.evaluate(() => (window as unknown as { modifiedClicks: boolean[] }).modifiedClicks)).toEqual([false, false])
   })
 
   test('proofs without an href render as text, not links', async ({ page }) => {
