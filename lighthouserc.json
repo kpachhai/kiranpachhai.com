@@ -3,7 +3,7 @@
     "collect": {
       "staticDistDir": "./dist",
       "url": ["http://localhost/", "http://localhost/work/schedule-service/"],
-      "numberOfRuns": 3,
+      "numberOfRuns": 5,
       "settings": {
         "chromeFlags": "--no-sandbox",
         "formFactor": "mobile",

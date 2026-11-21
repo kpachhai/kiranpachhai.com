@@ -83,6 +83,11 @@ describe('workflows', () => {
     expect(config.ci.collect.settings.chromeFlags ?? '').toMatch(/--no-sandbox/)
   })
 
+  it('lighthouse takes the median of 5 runs, since 3 let one slow shared-runner run fail the gate', () => {
+    const config = JSON.parse(readFileSync('lighthouserc.json', 'utf8')) as { ci: { collect: { numberOfRuns: number } } }
+    expect(config.ci.collect.numberOfRuns).toBe(5)
+  })
+
   it('verify runs data, build, gates and e2e in that order, with Node from .nvmrc', () => {
     for (const workflow of [ci, deploy]) {
       const steps = workflow.jobs.verify.steps
