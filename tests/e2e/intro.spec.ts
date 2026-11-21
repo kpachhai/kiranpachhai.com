@@ -385,10 +385,10 @@ test.describe('role cycle', () => {
   })
 })
 
-// The thesis italic is font-display optional, so a slow first visit may set the thesis in the
-// slanted-regular stand-in and swap the italic in later. Either face must wrap the same, or the
-// hero below it jumps.
-test.describe('hero layout does not depend on the thesis italic', () => {
+// A web font that lands after first paint must not re-wrap a hero line, or the hero below it jumps.
+// The thesis italic is font-display optional and its stand-in is a slanted regular; the display
+// face swaps and its stand-in is the size-matched Arial or Liberation Sans face.
+test.describe('hero layout does not depend on a late web font', () => {
   const boxes = (page: Page) =>
     page.evaluate(() =>
       ['.name', '[data-role-box]', '.thesis', '.langs', '.jump'].map((selector) => {
@@ -396,8 +396,12 @@ test.describe('hero layout does not depend on the thesis italic', () => {
         return `${selector} y${Math.round(rect.y)} h${Math.round(rect.height)}`
       }),
     )
-  for (const width of [390, 1280]) {
-    test(`at ${width} px the hero boxes match with the italic blocked and loaded`, async ({ browser }) => {
+  const faces = [
+    { label: 'the italic', pattern: '**/fonts/*thesis*.woff2' },
+    { label: 'the display face', pattern: '**/fonts/bricolage*.woff2' },
+  ]
+  for (const width of [390, 1280]) for (const face of faces) {
+    test(`at ${width} px the hero boxes match with ${face.label} blocked and loaded`, async ({ browser }) => {
       const readings: string[][] = []
       for (const block of [true, false]) {
         const context = await browser.newContext({ viewport: { width, height: 844 } })
@@ -406,7 +410,7 @@ test.describe('hero layout does not depend on the thesis italic', () => {
           sessionStorage.setItem('kp-roles-seen', '1')
         })
         const page = await context.newPage()
-        if (block) await page.route('**/fonts/*thesis*.woff2', (route) => route.abort())
+        if (block) await page.route(face.pattern, (route) => route.abort())
         await loaded(page)
         await page.evaluate(() => document.fonts.ready)
         readings.push(await boxes(page))

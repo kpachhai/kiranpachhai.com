@@ -11,6 +11,20 @@
   src: url('/fonts/bricolage-grotesque-latin-wght-wdth82-normal.woff2') format('woff2-variations');
 }
 
+/* Arial Bold (macOS, Windows) and Liberation Sans Bold (Linux) share widths, scaled to the condensed
+   cut so display text set before the web font arrives wraps where it will after the swap. Every
+   display style is weight 600-750; across them the condensed cut runs 0.84 of Arial Bold's width.
+   The overrides are Bricolage's ascent 0.93 and descent 0.27 divided by size-adjust. */
+@font-face {
+  font-family: "Bricolage Grotesque Fallback";
+  font-weight: 600 800;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 84%;
+  ascent-override: 110.71%;
+  descent-override: 32.14%;
+  line-gap-override: 0%;
+}
+
 @font-face {
   font-family: "Newsreader";
   font-style: normal;
