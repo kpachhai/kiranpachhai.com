@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contours } from '../../src/island/lenses/contours'
+import { contours } from '../../src/lib/contours'
 
 // A single gaussian centred on a square grid: every level below the peak is one closed ring.
 function gaussian(size: number, sigma: number): Float32Array {

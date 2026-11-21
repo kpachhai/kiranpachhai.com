@@ -2,10 +2,9 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { model } from '../../src/model'
 
-// axe with its full default rule set: every page, every lens on the home page, the interactive
-// states (sources on, drawer open, palette open, the Range roles x hats view, and the phone
-// toolkit expanded), both colour schemes, at 390 and 1280 px. Zero violations; no rule is disabled.
-const LENSES = ['plan', 'terrain', 'console', 'index', 'range'] as const
+// axe with its full default rule set: every page, the home page's sheet, the interactive states
+// (sources on, an area in the readout, palette open, and the phone toolkit expanded), both colour schemes, at
+// 390 and 1280 px. Zero violations; no rule is disabled.
 const REDIRECTS = ['/about/', '/portfolio/', '/contact/']
 const PAGES = [...model.caseStudies.map((study) => `/work/${study.slug}/`), '/404.html']
 
@@ -32,7 +31,6 @@ async function holdRedirect(page: Page, path: string) {
 async function homeReady(page: Page) {
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
-  await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'plan', { timeout: 8000 })
 }
 
 // Waits for an opening sheet or dialog to finish its transition, so axe reads its settled colours.
@@ -56,14 +54,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
     test.describe(`axe at ${viewport.width} px, ${colorScheme}`, () => {
       test.use({ viewport, colorScheme })
 
-      test('home page in every lens', async ({ page }) => {
-        await page.goto('/')
-        await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
-        for (const lens of LENSES) {
-          await page.locator(`[data-lens-button="${lens}"]`).click()
-          await expect(page.locator('#stage')).toHaveAttribute('data-settled', lens, { timeout: 8000 })
-          expect(await violations(page), lens).toEqual([])
-        }
+      test('home page with the sheet', async ({ page }) => {
+        await homeReady(page)
+        await expect(page.locator('#sheet')).toBeVisible()
+        expect(await violations(page)).toEqual([])
       })
 
       test('home page with sources on', async ({ page }) => {
@@ -74,12 +68,11 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
         expect(await violations(page)).toEqual([])
       })
 
-      test('home page with the drawer open', async ({ page }) => {
+      test('home page with an area in the readout', async ({ page }) => {
         await homeReady(page)
-        await page.locator(`#stage [data-node="${model.domains[0]!.id}"]`).click()
-        await expect(page.locator('#drawer')).toBeVisible()
-        await expect(page.locator('#drawer .dr-up')).toBeVisible()
-        await settled(page, '#drawer')
+        await page.locator(`#sheet a.summit[data-summit="${model.domains[0]!.id}"]`).click()
+        await expect(page.locator('#readout .ro-up')).toBeVisible()
+        await expect(page.locator('#sheet-cmd [data-cmd-text]')).toHaveText(`kp open ${model.domains[0]!.id}`)
         expect(await violations(page)).toEqual([])
       })
 
@@ -89,18 +82,6 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
         await expect(page.locator('#palette')).toBeVisible()
         await expect(page.locator('#palette input')).toBeFocused()
         await settled(page, '#palette')
-        expect(await violations(page)).toEqual([])
-      })
-
-      test('home page in the Range roles x hats view', async ({ page }) => {
-        await homeReady(page)
-        await page.locator('[data-lens-button="range"]').click()
-        await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range', { timeout: 8000 })
-        await page.locator('#stage .range-view button[data-range-view="roles"]').click()
-        await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'roles')
-        await expect(page.locator('#stage [data-hat-cell]').first()).toBeVisible()
-        await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range', { timeout: 8000 })
-        await settled(page, '#stage')
         expect(await violations(page)).toEqual([])
       })
 

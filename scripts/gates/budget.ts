@@ -1,7 +1,7 @@
 // Budget gate: measures the built site in dist/ against the performance budget and fails on any
-// breach. Sizes are gzip -9 bytes for JS and CSS and file bytes for woff2; 1 KB is 1000 bytes.
+// breach. Sizes are gzip -9 bytes for JS, CSS and the home HTML, and file bytes for woff2; 1 KB is 1000 bytes.
 // Third-party requests are read twice: statically from the built HTML and CSS, and at runtime from
-// a Chromium network log taken while every page loads and every lens on the home page settles.
+// a Chromium network log taken while every page loads and the home page's island starts.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -13,6 +13,7 @@ export const LIMITS = {
   jsTotal: 60_000,
   jsInitial: 35_000,
   css: 20_000,
+  html: 40_000,
   fontsTotal: 110_000,
   fontPreload: 40_000,
   thirdParty: 0,
@@ -27,6 +28,8 @@ export type Measures = {
   // Files on the route with import() calls whose target cannot be resolved; reported, not a breach.
   importWarnings: string[]
   css: number
+  // dist/index.html, which carries the sheet's two inline drawings.
+  html: number
   fontsTotal: number
   fontPreload: number
   thirdParty: string[]
@@ -36,7 +39,6 @@ export type Measures = {
 export type Runtime = { thirdParty: string[]; canvas: number }
 
 const OWN_HOSTS = new Set(['kiranpachhai.com', 'www.kiranpachhai.com'])
-const LENSES = ['plan', 'terrain', 'console', 'index', 'range'] as const
 const LOADING_LINK_RELS = /\b(?:stylesheet|preload|modulepreload|prefetch|icon|apple-touch-icon|manifest|preconnect|dns-prefetch)\b/i
 const NON_SCRIPT_TYPES = /^(?:application\/(?:ld\+)?json|importmap|speculationrules)$/i
 
@@ -180,7 +182,9 @@ export function measureDist(dist: string): Measures {
   const files = listFiles(dist)
   const pages = files.filter((file) => file.endsWith('.html'))
   const htmlOf = new Map(pages.map((file) => [file, readFileSync(file, 'utf8')]))
-  const home = htmlOf.get(join(dist, 'index.html')) ?? ''
+  const home = htmlOf.get(join(dist, 'index.html'))
+  // Without a home page the HTML and route figures would measure nothing and pass.
+  if (home === undefined) throw new Error(`budget: ${join(dist, 'index.html')} is missing; build the site first`)
   const route = routeJs(dist, join(dist, 'index.html'), home)
   const sumGzip = (ext: string) => files.filter((file) => extname(file) === ext).reduce((sum, file) => sum + gzipSize(readFileSync(file)), 0)
   const uniqueInline = new Set([...htmlOf.values()].flatMap(inlineScripts))
@@ -194,6 +198,7 @@ export function measureDist(dist: string): Measures {
     jsDeferred: route.deferred,
     importWarnings: route.warnings,
     css: sumGzip('.css'),
+    html: gzipSize(home),
     fontsTotal: files.filter((file) => extname(file) === '.woff2').reduce((sum, file) => sum + statSync(file).size, 0),
     fontPreload: Math.max(0, ...[...htmlOf.values()].map((html) => preloadedFontBytes(dist, html))),
     thirdParty: [...new Set(requests.filter(isThirdParty))],
@@ -207,6 +212,7 @@ export function breaches(measured: Measures): string[] {
     ...over('JS total (gzip)', measured.jsTotal, LIMITS.jsTotal),
     ...over('JS initial route / (gzip)', measured.jsInitial, LIMITS.jsInitial),
     ...over('CSS total (gzip)', measured.css, LIMITS.css),
+    ...over('Home HTML (gzip)', measured.html, LIMITS.html),
     ...over('Fonts total (woff2)', measured.fontsTotal, LIMITS.fontsTotal),
     ...over('Fonts preloaded on one page', measured.fontPreload, LIMITS.fontPreload),
     ...measured.thirdParty.map((url) => `Third-party request: ${url}`),
@@ -240,7 +246,7 @@ const pagePaths = (dist: string) =>
     .filter((file) => file.endsWith('.html'))
     .map((file) => `/${relative(dist, file).split(sep).join('/')}`.replace(/index\.html$/, ''))
 
-// Loads every page in Chromium, settles each lens where the home bar exists, and records any request
+// Loads every page in Chromium, waits for the island where the home sheet exists, and records any request
 // that leaves the local origin plus the most canvas elements seen at once.
 export async function observeRuntime(dist: string): Promise<Runtime> {
   const { chromium } = await import('@playwright/test')
@@ -256,7 +262,7 @@ export async function observeRuntime(dist: string): Promise<Runtime> {
         window.sessionStorage.setItem('kp-intro-seen', '1')
         window.sessionStorage.setItem('kp-roles-seen', '1')
       } catch {
-        // Storage blocked: the intro plays and the lens loop below still waits for each lens.
+        // Storage blocked: the intro may play; the network log below still waits for the island.
       }
     })
     context.on('request', (request) => {
@@ -268,14 +274,10 @@ export async function observeRuntime(dist: string): Promise<Runtime> {
       const page = await context.newPage()
       await page.goto(`${origin}${path}`, { waitUntil: 'networkidle' })
       canvas = Math.max(canvas, await countCanvas(page))
-      if ((await page.locator('[data-lens-button]').count()) > 0) {
+      if ((await page.locator('#sheet').count()) > 0) {
         await page.locator('html[data-island="ready"]').waitFor({ state: 'attached', timeout: 15_000 })
-        for (const lens of LENSES) {
-          await page.locator(`[data-lens-button="${lens}"]`).click()
-          await page.locator(`#stage[data-settled="${lens}"]`).waitFor({ state: 'attached', timeout: 15_000 })
-          await page.waitForLoadState('networkidle')
-          canvas = Math.max(canvas, await countCanvas(page))
-        }
+        await page.waitForLoadState('networkidle')
+        canvas = Math.max(canvas, await countCanvas(page))
       }
       await page.close()
     }
@@ -293,6 +295,7 @@ function report(measured: Measures): void {
   console.log(`JS on demand from / (gzip)    ${kb(measured.jsDeferred)} (counted in JS total)`)
   for (const warning of measured.importWarnings) console.log(`WARN ${warning}`)
   console.log(`CSS total (gzip)              ${kb(measured.css)} of ${kb(LIMITS.css)}`)
+  console.log(`Home HTML (gzip)              ${kb(measured.html)} of ${kb(LIMITS.html)}`)
   console.log(`Fonts total (woff2)           ${kb(measured.fontsTotal)} of ${kb(LIMITS.fontsTotal)}`)
   console.log(`Fonts preloaded on one page   ${kb(measured.fontPreload)} of ${kb(LIMITS.fontPreload)}`)
   console.log(`Third-party requests          ${measured.thirdParty.length} of ${LIMITS.thirdParty}`)

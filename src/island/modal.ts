@@ -1,5 +1,5 @@
 // Makes aria-modal true in fact: while a dialog is open, every other top-level region of <body>
-// is inert. Dialogs stack (the palette can open over the drawer); only the top one stays live.
+// is inert. Dialogs stack; only the top one stays live.
 // Elements marked data-modal manage their own closed state and are inert whenever not on top;
 // the live region stays out of this so announcements still reach assistive tech.
 const stack: HTMLElement[] = []

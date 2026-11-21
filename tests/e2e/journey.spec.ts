@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test'
 import { model } from '../../src/model'
 
 const lastRole = model.roles.at(-1)!
-const hatCellCount = model.roles.reduce((sum, role) => sum + role.hats.length, 0)
 
 // The intro and the role cycle are not under test here; skip them so the page settles at once.
 test.beforeEach(async ({ page }) => {
@@ -118,98 +117,6 @@ test.describe('journey with JavaScript', () => {
   })
 })
 
-test.describe('range roles x hats toggle', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
-
-  const nodeRects = (page: Page) =>
-    page.locator('#stage .node-box').evaluateAll((boxes) => boxes.map((box) => `${box.style.left},${box.style.top},${box.style.width}`))
-
-  test('switches layouts by keyboard, keeps the choice for the session, and back', async ({ page }) => {
-    await page.goto('/#lens-range')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    const areas = await nodeRects(page)
-    const toRoles = page.locator('#stage .range-view button[data-range-view="roles"]')
-    await expect(toRoles).toBeVisible()
-    await expect(toRoles).toHaveAttribute('aria-pressed', 'false')
-    await toRoles.focus()
-    await page.keyboard.press('Enter')
-    await expect(toRoles).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'roles')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    await expect(page.locator('#stage [data-hat-cell]')).toHaveCount(hatCellCount)
-    await expect(page.locator('#stage [data-cell]')).toHaveCount(0)
-    expect(await nodeRects(page)).not.toEqual(areas)
-    expect(await page.evaluate(() => window.sessionStorage.getItem('kp-range-view'))).toBe('roles')
-
-    await page.reload()
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'roles')
-    await expect(page.locator('#stage [data-hat-cell]')).toHaveCount(hatCellCount)
-
-    const toAreas = page.locator('#stage .range-view button[data-range-view="areas"]')
-    await toAreas.focus()
-    await page.keyboard.press('Space')
-    await expect(toAreas).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'areas')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    await expect(page.locator('#stage [data-cell]')).toHaveCount(model.range.length)
-    expect(await nodeRects(page)).toEqual(areas)
-  })
-
-  test('a fast double toggle leaves one decoration layer and no running animation', async ({ page }) => {
-    await page.goto('/#lens-range')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    // Both presses land inside the 180 ms fade of the first.
-    await page.evaluate(() => {
-      document.querySelector<HTMLElement>('#stage .range-view button[data-range-view="roles"]')!.click()
-      document.querySelector<HTMLElement>('#stage .range-view button[data-range-view="areas"]')!.click()
-    })
-    await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'areas')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    await expect
-      .poll(() => page.evaluate(() => document.getAnimations().filter((animation) => !(animation instanceof CSSAnimation)).length))
-      .toBe(0)
-    await expect(page.locator('#stage svg [data-deco]')).toHaveCount(1)
-    await expect(page.locator('#stage [data-hat-cell]')).toHaveCount(0)
-    await expect(page.locator('#stage [data-cell]')).toHaveCount(model.range.length)
-    await expect(page.locator('#island-live')).toHaveText('Range: areas x modes')
-
-    await page.evaluate(() => {
-      for (const view of ['roles', 'areas', 'roles']) document.querySelector<HTMLElement>(`#stage .range-view button[data-range-view="${view}"]`)!.click()
-    })
-    await expect(page.locator('#stage')).toHaveAttribute('data-range-view', 'roles')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    await expect
-      .poll(() => page.evaluate(() => document.getAnimations().filter((animation) => !(animation instanceof CSSAnimation)).length))
-      .toBe(0)
-    await expect(page.locator('#stage svg [data-deco]')).toHaveCount(1)
-    await expect(page.locator('#stage [data-cell]')).toHaveCount(0)
-    await expect(page.locator('#stage [data-hat-cell]')).toHaveCount(hatCellCount)
-    await expect(page.locator('#island-live')).toHaveText('Range: roles x hats. Each Journey stop lists its hats.')
-  })
-
-  test('names the hat columns as the Journey does', async ({ page }) => {
-    await page.addInitScript(() => window.sessionStorage.setItem('kp-range-view', 'roles'))
-    await page.goto('/#lens-range')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-    const heads = await page.locator('#stage .range-hat-head:not(.corner)').allTextContents()
-    expect(heads.map((text) => text.trim())).toEqual(model.hats.map((hat) => hat.name))
-  })
-
-  test('the Plan hub counts primary languages, as the hero and BOM do', async ({ page }) => {
-    await page.goto('/')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'plan')
-    const primary = model.materials.filter((material) => material.band === 'language').length
-    await expect(page.locator('#stage svg')).toContainText(`${primary} PRIMARY LANGUAGES /`)
-  })
-
-  test('shows only in the Range lens', async ({ page }) => {
-    await page.goto('/')
-    await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'plan')
-    await expect(page.locator('#stage .range-view')).toBeHidden()
-  })
-})
-
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`journey at 390 px, ${colorScheme}`, () => {
     test.use({ viewport: { width: 390, height: 844 }, colorScheme })
@@ -244,18 +151,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(toggle).toHaveAttribute('aria-expanded', 'true')
       const sizes = await page.locator('#journey').evaluate(renderedTextSizes)
       expect(sizes.length).toBeGreaterThan(50)
-      expect(sizes.filter((item) => item.size < 10)).toEqual([])
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
-    })
-
-    test('the roles x hats view keeps stage text at 10 px or more', async ({ page }) => {
-      await page.emulateMedia({ reducedMotion: 'reduce' })
-      await page.addInitScript(() => window.sessionStorage.setItem('kp-range-view', 'roles'))
-      await page.goto('/#lens-range')
-      await expect(page.locator('#stage')).toHaveAttribute('data-settled', 'range')
-      await expect(page.locator('#stage [data-hat-cell]')).toHaveCount(hatCellCount)
-      const sizes = await page.locator('#stage').evaluate(renderedTextSizes)
-      expect(sizes.length).toBeGreaterThan(5)
       expect(sizes.filter((item) => item.size < 10)).toEqual([])
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
     })

@@ -150,7 +150,7 @@ function glyphId(cmap: Buffer, codePoint: number): number {
 // advance is its local font's advance width in its own units per em: Menlo and DejaVu Sans Mono
 // 1233/2048 (Liberation Mono, in the same face, is 1229/2048), Consolas 1126/2048.
 describe('mono fallback metrics', () => {
-  const BAR_TEXT = 'KP Plan 1 Terrain 2 Console 3 Index 4 Range 5 Search Ctrl K Sources Theme: system light dark Keyboard shortcuts'
+  const BAR_TEXT = 'KP Search Ctrl K Sources Theme: system light dark'
   const FALLBACKS = [
     { family: 'Martian Mono Fallback', advance: 1233 / 2048 },
     { family: 'Martian Mono Fallback Consolas', advance: 1126 / 2048 },

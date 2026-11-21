@@ -57,7 +57,7 @@ test.describe('provenance toggle', () => {
     })
   }
 
-  test('home: every proof and material carries its source, and the drawer and the BOM show it', async ({ page }) => {
+  test('home: every proof and material carries its source, and the readout and the materials schedule show it', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
     for (const proof of model.proofs) await expect(page.locator(`[data-claim-id="proof-${proof.id}"] ${SOURCE}`), proof.id).toHaveCount(1)
@@ -66,23 +66,23 @@ test.describe('provenance toggle', () => {
     await expect(page.locator('#provenance-note')).toBeVisible()
     await expect(page.locator('#provenance-note')).toHaveText('Range cells and ledger rows link to their source.')
 
-    // Plan lens: the bill of materials shows each row's source.
+    // The materials schedule shows each row's source.
     for (const material of model.materials) await expect(page.locator(`[data-claim-id="material-${material.id}"] ${SOURCE}`), material.id).toBeVisible()
 
-    // The drawer shows each proof's source for a domain, and the material's own source.
+    // The readout shows each proof's source for a domain, and the material's own source.
     const domain = model.domains[0]
-    const node = page.locator(`#stage [data-node="${domain.id}"]`)
+    const node = page.locator(`#sheet a.summit[data-summit="${domain.id}"]`)
     await node.focus()
     await page.keyboard.press('Enter')
-    await expect(page.locator('#drawer')).toBeVisible()
+    await expect(page.locator('#readout-h')).toHaveText(domain.name)
     const domainProofs = model.proofs.filter((proof) => proof.domainId === domain.id)
-    for (const proof of domainProofs) await expect(page.locator(`#drawer [data-claim-id="drawer-proof-${proof.id}"] ${SOURCE}`), proof.id).toBeVisible()
+    for (const proof of domainProofs) await expect(page.locator(`#readout [data-claim-id="readout-proof-${proof.id}"] ${SOURCE}`), proof.id).toBeVisible()
     await page.keyboard.press('Escape')
-    await expect(page.locator('#drawer')).toBeHidden()
+    await expect(page.locator('#readout .ro-tree')).toBeVisible()
 
     const material = model.materials[0]
     await page.locator(`[data-material-open="${material.id}"]`).click()
-    await expect(page.locator(`#drawer [data-claim-id="drawer-material-${material.id}"] ${SOURCE}`)).toBeVisible()
+    await expect(page.locator(`#readout [data-claim-id="readout-material-${material.id}"] ${SOURCE}`)).toBeVisible()
   })
 
   test('labels read as URL text, LinkedIn, or Owner with a date and no link', async ({ page }) => {
@@ -194,19 +194,9 @@ test.describe('case-study diagrams', () => {
     expect(opacities.every((value) => value === '1')).toBe(true)
   })
 
-  test('the case-study page adopts the lens chosen on the home page', async ({ page }) => {
-    await page.goto('/')
-    await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
-    await page.locator('[data-lens-button="console"]').click()
-    await expect(page.locator('#stage')).toHaveAttribute('data-lens', 'console')
+  test('a case-study page renders its diagram with no data-lens on the root', async ({ page }) => {
     await page.goto('/work/schedule-service/')
-    await expect(page.locator('html')).toHaveAttribute('data-lens', 'console')
-    const font = await page.locator('figure.dg text').first().evaluate((node) => getComputedStyle(node).fontFamily)
-    expect(font).toContain('Martian Mono')
-  })
-
-  test('without a chosen lens the diagram uses the plan lens', async ({ page }) => {
-    await page.goto('/work/schedule-service/')
+    await expect(page.locator('html')).not.toHaveAttribute('data-lens', /.*/)
     const font = await page.locator('figure.dg text').first().evaluate((node) => getComputedStyle(node).fontFamily)
     expect(font).toContain('Bricolage Grotesque')
   })
@@ -266,7 +256,6 @@ function renderedTextSizes(root: Element): { text: string; size: number; secondL
 
 test.describe('text at 390 px', () => {
   test.use({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' })
-  const LENSES = ['plan', 'terrain', 'console', 'index', 'range']
   const small = (sizes: { text: string; size: number }[]) => sizes.filter((item) => item.size < 10)
 
   test('counts a CSS transform scale in the size of HTML text', async ({ page }) => {
@@ -290,18 +279,18 @@ test.describe('text at 390 px', () => {
     expect(small(sizes)).toEqual([])
   })
 
-  test('the drawer, with sources on, is at least 10 px', async ({ page }) => {
+  test('the readout, with sources on, is at least 10 px', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
     await turnOn(page)
     for (const domain of model.domains) {
-      await page.locator(`#stage [data-node="${domain.id}"]`).click()
-      await expect(page.locator('#drawer')).toBeVisible()
-      const sizes = await page.locator('#drawer').evaluate(renderedTextSizes)
+      await page.locator(`#sheet a.summit[data-summit="${domain.id}"]`).click()
+      await expect(page.locator('#readout-h')).toHaveText(domain.name)
+      const sizes = await page.locator('#readout').evaluate(renderedTextSizes)
       expect(sizes.some((item) => item.text.length > 0), domain.id).toBe(true)
       expect(small(sizes), domain.id).toEqual([])
       await page.keyboard.press('Escape')
-      await expect(page.locator('#drawer')).toBeHidden()
+      await expect(page.locator('#readout .ro-tree')).toBeVisible()
     }
   })
 
@@ -322,26 +311,26 @@ test.describe('text at 390 px', () => {
     })
   }
 
-  for (const lens of LENSES) {
-    test(`stage text in the ${lens} lens is at least 10 px`, async ({ page }) => {
-      await page.goto(`/#lens-${lens}`)
+  // The wide drawing scales with its cell, so the narrow desktop widths are the ones to watch.
+  for (const width of [390, 900, 1024, 1280]) {
+    test(`sheet text is at least 10 px at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/')
       await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
-      await expect(page.locator('#stage')).toHaveAttribute('data-lens', lens)
       const sizes = await page.locator('#stage').evaluate(renderedTextSizes)
       expect(sizes.length).toBeGreaterThan(5)
       expect(sizes.filter((item) => item.size < 10)).toEqual([])
     })
-
-    test(`diagram text in the ${lens} lens: labels at least 11 px, second lines at least 10 px`, async ({ page }) => {
-      await page.addInitScript((chosen) => window.sessionStorage.setItem('kp-lens', chosen), lens)
-      for (const slug of SLUGS) {
-        await page.goto(`/work/${slug}/`)
-        const sizes = await page.locator('figure.dg').evaluate(renderedTextSizes)
-        expect(sizes.length, slug).toBeGreaterThan(4)
-        expect(sizes.filter((item) => item.size < (item.secondLine ? 10 : 11)), slug).toEqual([])
-      }
-    })
   }
+
+  test('diagram text: labels at least 11 px, second lines at least 10 px', async ({ page }) => {
+    for (const slug of SLUGS) {
+      await page.goto(`/work/${slug}/`)
+      const sizes = await page.locator('figure.dg').evaluate(renderedTextSizes)
+      expect(sizes.length, slug).toBeGreaterThan(4)
+      expect(sizes.filter((item) => item.size < (item.secondLine ? 10 : 11)), slug).toEqual([])
+    }
+  })
 })
 
 test.describe('case-study images', () => {

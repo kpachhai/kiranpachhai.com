@@ -9,9 +9,3 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   element.append(...children)
   return element
 }
-
-// True while focus is in a text field, where keys type rather than act.
-export function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
-}

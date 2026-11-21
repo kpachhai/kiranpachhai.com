@@ -1,23 +1,11 @@
 ---
-// The no-JS hero: identity plus the Index lens of the capability map. The island mounts on #stage later.
+// The no-JS hero: identity, the site-plan sheet, and under it the static proof list each summit
+// links to. With JavaScript the list is hidden and the island adds behaviour to the sheet.
 import { cycleTitles, model } from '../../model'
-import { languages, proofById, proofsInDomain, upstreamIn } from '../../lib/site'
+import { languages, proofsInDomain, upstreamIn } from '../../lib/site'
 import { STATUS_LABELS } from '../../model/labels'
 import SourceTag from '../SourceTag.astro'
-
-// The bill of materials: four bands, each row with where it is used and the areas of work involved.
-// The two middle bands use the toolkit's set names (Journey), so a part sits in the same group in both.
-const BANDS = [
-  { id: 'language', label: 'Primary languages', part: 'L' },
-  { id: 'stack', label: 'Frameworks and stacks', part: 'F' },
-  { id: 'tool', label: 'Platforms and tools', part: 'T' },
-  { id: 'discipline', label: 'Disciplines', part: 'D' },
-] as const
-const areaNumbers = (proofIds: string[]) =>
-  model.domains
-    .map((domain, position) => ({ id: domain.id, number: String(position + 1).padStart(2, '0') }))
-    .filter((area) => proofIds.some((id) => proofById(id).domainId === area.id))
-    .map((area) => area.number)
+import Sheet from '../sheet/Sheet.astro'
 
 const SECTIONS: [string, string][] = [
   ['#work', 'Selected work'],
@@ -49,23 +37,16 @@ const SECTIONS: [string, string][] = [
   </nav>
 </header>
 
-<section id="stage" class="stage" data-lens="index" aria-labelledby="stage-h">
+<section id="stage" class="stage" aria-labelledby="stage-h">
   <div class="wrap">
     <h2 id="stage-h" class="sr-only">Areas of work and their proof</h2>
-    <div class="stage-cap js-only">
-      <button class="tool" type="button" id="intro-skip" hidden>Skip intro</button>
-      <button class="tool" type="button" id="intro-replay">Replay intro</button>
-    </div>
-    <div class="range-view js-only" role="group" aria-label="Range view">
-      <button class="tool" type="button" data-range-view="areas" aria-pressed="true">Areas x modes</button>
-      <button class="tool" type="button" data-range-view="roles" aria-pressed="false">Roles x hats</button>
-    </div>
+    <Sheet />
     <ol class="index">
       {
         model.domains.map((domain, position) => {
           const proofs = proofsInDomain(domain.id)
           return (
-            <li class="entry" data-domain={domain.id}>
+            <li class="entry" id={`area-${domain.id}`} data-domain={domain.id}>
               <h3 class="entry-name">
                 <span class="num" aria-hidden="true">{String(position + 1).padStart(2, '0')}</span>
                 {domain.name}
@@ -106,38 +87,6 @@ const SECTIONS: [string, string][] = [
         })
       }
     </ol>
-    <section class="bom" aria-labelledby="bom-h">
-      <div class="bom-head">
-        <h3 id="bom-h">Bill of materials</h3>
-        <span class="bom-cols" aria-hidden="true">Part / material / where used / areas</span>
-      </div>
-      {
-        BANDS.map((band) => (
-          <div class="bom-band" data-band={band.id}>
-            <h4 class="bom-band-h">{band.label}</h4>
-            <ol class="bom-list">
-              {model.materials
-                .filter((material) => material.band === band.id)
-                .map((material, position) => (
-                  <li data-material={material.id} data-claim-id={`material-${material.id}`}>
-                    <div class="bom-row">
-                      <span class="pn" aria-hidden="true">{`${band.part}${position + 1}`}</span>
-                      <span class="mt">{material.name}</span>
-                      <span class="used">{material.usedIn.map((id) => proofById(id).label).join('; ')}</span>
-                      <span class="dm" aria-hidden="true">
-                        {areaNumbers(material.usedIn).map((number) => (
-                          <i>{number}</i>
-                        ))}
-                      </span>
-                    </div>
-                    <SourceTag source={material.source} />
-                  </li>
-                ))}
-            </ol>
-          </div>
-        ))
-      }
-    </section>
   </div>
 </section>
 
@@ -167,15 +116,11 @@ const SECTIONS: [string, string][] = [
   .langs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
   .lang { font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--rule); padding: 2px 8px; }
   .jump { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 0.75rem; padding-top: 12px; border-top: 1px solid var(--rule); }
-  .stage-cap { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
-  /* Reduced motion has nothing to replay. Skip stays laid out while shown, so the intro can hand its
-     focus on when reduced motion turns on mid-intro; the empty row then folds away. */
-  @media (prefers-reduced-motion: reduce) {
-    #intro-replay { display: none; }
-    .stage-cap:not(:has(#intro-skip:not([hidden]))) { display: none; }
-  }
-  .stage { background: var(--s-ground); color: var(--s-ink); padding-block: 24px 32px; border-block: 1px solid var(--rule); }
-  .index { list-style: none; margin: 0; padding: 0; }
+  .stage { background: var(--paper); color: var(--s-ink); padding-block: 24px 32px; border-block: 1px solid var(--rule); }
+  .index { list-style: none; margin: 24px 0 0; padding: 0; }
+  /* Once the island is ready the summits and the readout show the same content, so the list is not
+     repeated. Until then each summit still links to it. It sits below the sheet, off the first screen. */
+  :global(html[data-island="ready"]) #stage .index { display: none; }
   .entry { padding-block: 18px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 32px; }
   .entry:last-child { border-bottom: 0; }
   .entry-name { font-size: 2.75rem; line-height: 1.02; font-weight: 700; font-stretch: 82%; letter-spacing: 0.004em; overflow-wrap: break-word; }
@@ -185,7 +130,7 @@ const SECTIONS: [string, string][] = [
   .proofs a, .label { font-weight: 600; color: var(--s-acc); }
   .label { color: var(--s-ink); }
   .detail { font-size: 0.95rem; color: var(--s-muted); line-height: 1.4; }
-  /* The curated upstream links per area. With JavaScript they move into the area's drawer instead. */
+  /* The curated upstream links per area. With JavaScript they move into the area's readout instead. */
   .up-links { grid-column: 2; font-family: var(--body); }
   .up-h { font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--s-muted); margin: 4px 0 6px; }
   .up-links ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

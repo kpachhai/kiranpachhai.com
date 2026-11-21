@@ -13,7 +13,7 @@ const COUNTS: [keyof typeof github.counts, string][] = [
 ]
 
 // One row per repo; a repo with several statuses shows several chips. The rows are the same ones
-// the drawer and the no-JS hero list read (src/lib/upstream.ts).
+// the readout and the no-JS hero list read (src/lib/upstream.ts).
 const groups = model.domains.map((domain) => ({ domain, rows: upstreamIn(domain.id) })).filter((group) => group.rows.length > 0)
 ---
 

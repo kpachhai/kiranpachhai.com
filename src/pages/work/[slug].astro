@@ -55,12 +55,9 @@ const SCREENS: Record<string, { src: ImageMetadata; alt: string }[]> = {
 const screens = await Promise.all(
   (SCREENS[study.slug] ?? []).map(async (screen) => ({ ...screen, full: (await getImage({ src: screen.src, width: 1200, format: 'webp' })).src })),
 )
-// Case-study pages have no lens switch; they draw in the lens last shown on the home page.
-const LENS_SCRIPT = `try{var l=sessionStorage.getItem('kp-lens');if(['plan','terrain','console','index','range'].indexOf(l)>=0)document.documentElement.setAttribute('data-lens',l)}catch(e){}`
 ---
 
 <Base title={`${study.title} | ${model.hero.name}`} description={study.problem.text} path={`/work/${study.slug}/`} ogImage={`/og/${study.slug}.png`}>
-  <Fragment slot="head"><script is:inline set:html={LENS_SCRIPT} /></Fragment>
   <main class="wrap case">
     <div class="top">
       <nav class="crumbs" aria-label="Breadcrumb">

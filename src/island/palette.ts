@@ -1,15 +1,16 @@
 // The command palette: Ctrl or Cmd + K, or the Search button in the bar.
 // Plain text filters every entry; "kind: term" scopes to one kind; "mode: <mode>" lists the
-// proofs worked in that mode; "kp <domain|method|lens>" runs a command.
+// proofs worked in that mode; "kp <domain|method>" runs a command, and "kp open <domain|method>" runs
+// the same one.
 import type { DomainId } from '../model/schema'
 import type { IslandData } from './data'
 import { el } from './dom'
-import { openDrawer } from './drawer'
 import { popModal, pushModal } from './modal'
 import { prefersReducedMotion } from './motion'
-import { LENSES, THEMES, setLens, setShortcutsEnabled, setTheme, shortcutsEnabled } from './state'
+import { showArea, showMaterial } from './readout'
+import { THEMES, setTheme } from './state'
 
-type Kind = 'domain' | 'proof' | 'method' | 'material' | 'mode' | 'lens' | 'theme' | 'setting' | 'command'
+type Kind = 'domain' | 'proof' | 'method' | 'material' | 'mode' | 'theme' | 'command'
 
 interface Entry {
   kind: Kind
@@ -27,12 +28,11 @@ const KIND_LABELS: Record<Kind, string> = {
   method: 'Method',
   material: 'Material',
   mode: 'Mode',
-  lens: 'Lens',
   theme: 'Theme',
-  setting: 'Setting',
   command: 'Command',
 }
 const SCOPED = /^([a-z]+):\s*(.*)$/
+const OPEN_ALIAS = /^kp open(?=\s|$)/
 
 let palette: HTMLElement
 let input: HTMLInputElement
@@ -65,16 +65,16 @@ function buildEntries(): Entry[] {
   })
   const domains = data.domains.map((domain) =>
     make('domain', domain.name, proofCount(data.proofs.filter((proof) => proof.domainId === domain.id).length), () =>
-      openDrawer({ domainId: domain.id }),
+      showArea(domain.id, { focus: true }),
     ),
   )
   const proofs = data.proofs.map((proof) => ({
-    ...make('proof', proof.label, domainName(proof.domainId), () => openDrawer({ domainId: proof.domainId }), proof.detail),
+    ...make('proof', proof.label, domainName(proof.domainId), () => showArea(proof.domainId, { focus: true }), proof.detail),
     proofId: proof.id,
   }))
   const methods = data.methods.map((method) => make('method', `${method.id} ${method.name}`, 'How I work', () => scrollToMethod(method.id)))
   const materials = data.materials.map((material) =>
-    make('material', material.name, material.band, () => openDrawer({ materialId: material.id })),
+    make('material', material.name, material.band, () => showMaterial(material.id)),
   )
   const modes = data.modes.map((mode) => ({
     ...make('mode', `mode: ${mode.id}`, proofCount(data.proofs.filter((proof) => proof.modes.includes(mode.id)).length), () =>
@@ -82,18 +82,12 @@ function buildEntries(): Entry[] {
     ),
     keepOpen: true,
   }))
-  const lenses = LENSES.map((lens, position) => make('lens', `lens: ${lens}`, `press ${position + 1}`, () => void setLens(lens)))
   const themes = THEMES.map((theme) => make('theme', `theme: ${theme}`, '', () => setTheme(theme)))
-  const on = shortcutsEnabled()
-  const shortcuts = make('setting', `Keyboard shortcuts: ${on ? 'on' : 'off'}`, `Enter turns keys 1 to 5 ${on ? 'off' : 'on'}`, () =>
-    setShortcutsEnabled(!on),
-  )
   const commands = [
-    ...data.domains.map((domain) => make('command', `kp ${domain.id}`, domain.name, () => openDrawer({ domainId: domain.id }))),
+    ...data.domains.map((domain) => make('command', `kp ${domain.id}`, domain.name, () => showArea(domain.id, { focus: true }))),
     ...data.methods.map((method) => make('command', `kp ${method.id.toLowerCase()}`, method.name, () => scrollToMethod(method.id))),
-    ...LENSES.map((lens) => make('command', `kp ${lens}`, 'lens', () => void setLens(lens))),
   ]
-  return [...domains, ...proofs, ...methods, ...materials, ...modes, ...lenses, ...themes, shortcuts, ...commands]
+  return [...domains, ...proofs, ...methods, ...materials, ...modes, ...themes, ...commands]
 }
 
 function proofsInMode(term: string): Entry[] {
@@ -105,7 +99,8 @@ function proofsInMode(term: string): Entry[] {
 }
 
 function matching(query: string): Entry[] {
-  const q = query.trim().toLowerCase()
+  // The command line and the readout print `kp open <id>`, so that runs as `kp <id>`.
+  const q = query.trim().toLowerCase().replace(OPEN_ALIAS, 'kp')
   const scoped = SCOPED.exec(q)
   if (scoped?.[1] === 'mode') return proofsInMode(scoped[2])
   if (scoped && scoped[1] in KIND_LABELS) {
@@ -115,7 +110,7 @@ function matching(query: string): Entry[] {
   if (q === 'kp' || q.startsWith('kp ')) {
     const term = q.slice(2).trim()
     const found = entries.filter((entry) => entry.kind === 'command' && entry.search.includes(term))
-    // An exact command wins the top slot, so "kp range" runs the lens and not a partial match.
+    // An exact command wins the top slot, so "kp a" runs method A and not a partial match.
     return found.sort((a, b) => Number(b.label === q) - Number(a.label === q))
   }
   return entries.filter((entry) => entry.kind !== 'command' && (q === '' || entry.search.includes(q)))
@@ -131,7 +126,7 @@ function render(): void {
       el('span', { class: 'h' }, [entry.hint]),
     ]),
   )
-  list.replaceChildren(...(items.length > 0 ? items : [el('li', { class: 'empty', role: 'presentation' }, ['No match. Try a domain, a proof, a method or "lens: index".'])]))
+  list.replaceChildren(...(items.length > 0 ? items : [el('li', { class: 'empty', role: 'presentation' }, ['No match. Try a domain, a proof, a method or "mode: teach".'])]))
   if (shown.length > 0) input.setAttribute('aria-activedescendant', `pal-opt-${active}`)
   else input.removeAttribute('aria-activedescendant')
   list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -150,14 +145,15 @@ export function openPalette(): void {
   opener = focused instanceof HTMLElement && focused !== document.body ? focused : null
   palette.hidden = false
   pushModal(palette)
-  // Rebuilt per open so the shortcut entry shows its current state.
+  // Built afresh on each open, from the island data and the theme list.
   entries = buildEntries()
   showQuery('')
 }
 
 export function closePalette(): void {
   if (!isPaletteOpen()) return
-  // Blur first: with no opener to return to, a hidden input must not keep swallowing keys 1 to 5.
+  // Blur first: with no opener to return to, the hidden input must not keep focus and go on taking
+  // the keys typed on the page.
   input.blur()
   palette.hidden = true
   popModal(palette)

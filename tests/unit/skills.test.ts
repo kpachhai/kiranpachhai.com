@@ -268,13 +268,9 @@ describe('provenance gate covers the career', () => {
   })
 })
 
-describe('island data for the Range roles x hats view', () => {
-  const data = buildIslandData(model, (source) => sourceLabel(source), upstream)
-
-  it('carries each role with its hats and the seven hats in order', () => {
-    expect(data.career.map((role) => role.id)).toEqual(model.roles.map((role) => role.id))
-    expect(data.career.map((role) => role.hats)).toEqual(model.roles.map((role) => role.hats))
-    expect(data.hats.map((hat) => hat.id)).toEqual([...HAT_IDS])
+describe('island data for the hero role cycle', () => {
+  it('carries the cycle titles in order', () => {
+    const data = buildIslandData(model, (source) => sourceLabel(source), upstream)
     expect(data.roles.map((role) => role.title)).toEqual(cycleTitles)
   })
 })

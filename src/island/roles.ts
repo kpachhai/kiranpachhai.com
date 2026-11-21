@@ -3,8 +3,7 @@
 // of the real line, which keeps its box (so nothing shifts) and stays in the accessibility tree
 // the whole time, so a screen reader hears the settled line and no step is announced.
 import type { Role } from '../model/schema'
-import { EASE } from './lenses/shared'
-import { onReducedMotionChange } from './motion'
+import { EASE, onReducedMotionChange } from './motion'
 
 export const ROLES_KEY = 'kp-roles-seen'
 const STEP_MS = 460

@@ -1,57 +1,25 @@
 ---
-// Mounts the island on the static hero: the sticky bar, the proof drawer, the palette and the data
+// Mounts the island on the static hero: the sticky bar, the palette and the data
 // they read. Everything here is hidden without JavaScript; the static list in #stage stays the page.
 import { model } from '../../model'
 import { buildIslandData, DATA_ELEMENT_ID, serialiseIslandData } from '../../island/data'
-import { LENSES, DEFAULT_LENS } from '../../island/state'
-import '../../island/lenses/lenses.css'
 import ProvenanceToggle from '../ProvenanceToggle.astro'
 import { sourceLabel } from '../../lib/provenance'
 import { upstream } from '../../lib/site'
 
-const LENS_NAMES: Record<(typeof LENSES)[number], string> = {
-  plan: 'Plan',
-  terrain: 'Terrain',
-  console: 'Console',
-  index: 'Index',
-  range: 'Range',
-}
 const islandData = serialiseIslandData(buildIslandData(model, (source) => sourceLabel(source), upstream))
 ---
 
 <header class="bar js-only">
   <div class="wrap bar-in">
     <span class="mark" aria-hidden="true">KP</span>
-    <div class="lenses" role="group" aria-label="Lens">
-      {
-        LENSES.map((lens, position) => (
-          <button type="button" data-lens-button={lens} aria-pressed={String(lens === DEFAULT_LENS)}>
-            {LENS_NAMES[lens]} <kbd>{position + 1}</kbd>
-          </button>
-        ))
-      }
-    </div>
     <button class="tool" type="button" id="palette-open" aria-haspopup="dialog" aria-controls="palette">
       Search <span class="hint">Ctrl K</span>
     </button>
     <ProvenanceToggle note="Range cells and ledger rows link to their source." />
     <button class="tool" type="button" id="theme-toggle" data-theme-control>Theme: system</button>
-    <button class="tool shortcuts" type="button" id="shortcuts-toggle" data-shortcuts-control aria-pressed="true">Keyboard shortcuts</button>
   </div>
 </header>
-
-<div class="drawer js-only" id="drawer" data-modal role="dialog" aria-modal="true" aria-labelledby="drawer-title" inert>
-  <div class="dr-top">
-    <span class="eyebrow" data-drawer-eyebrow></span>
-    <button class="tool" type="button" data-drawer-close>Close</button>
-  </div>
-  <h2 id="drawer-title" tabindex="-1"></h2>
-  <div data-drawer-body></div>
-  <div class="dr-nav" data-drawer-nav>
-    <button class="tool" type="button" data-step="prev">Previous domain</button>
-    <button class="tool" type="button" data-step="next">Next domain</button>
-  </div>
-</div>
 
 <div class="pal js-only" id="palette" data-modal hidden>
   <div class="pal-box" role="dialog" aria-modal="true" aria-label="Search the map">
@@ -62,12 +30,12 @@ const islandData = serialiseIslandData(buildIslandData(model, (source) => source
       aria-controls="palette-list"
       aria-autocomplete="list"
       aria-label="Search the map"
-      placeholder="Search domains, proofs, methods, materials, lenses"
+      placeholder="Search domains, proofs, methods, materials"
       autocomplete="off"
       spellcheck="false"
     />
     <ul id="palette-list" role="listbox" aria-label="Results"></ul>
-    <p class="pal-foot">Up and down to move, Enter to open, Esc to close. Try "mode: teach" or "kp terrain".</p>
+    <p class="pal-foot">Up and down to move, Enter to open, Esc to close. Try "mode: teach" or "kp {model.domains[0].id}".</p>
   </div>
 </div>
 
@@ -88,73 +56,16 @@ const islandData = serialiseIslandData(buildIslandData(model, (source) => source
   .bar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-block: 10px; }
   .bar .mark { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.06em; margin-right: auto; }
   .bar .hint { color: var(--muted); }
-  .lenses { display: inline-flex; border: 1px solid var(--ink); }
-  .lenses button { border: 0; background: transparent; color: inherit; padding: 7px 12px; font-family: var(--mono); font-size: 0.75rem; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; justify-content: center; }
-  .lenses button + button { border-left: 1px solid var(--ink); }
-  .lenses button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
-  .lenses kbd { font: inherit; font-size: 0.625rem; color: var(--muted); }
-  .lenses button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-  .lenses button[aria-pressed="true"] kbd { color: inherit; opacity: 0.7; }
-  .bar .shortcuts[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-  /* Phones have no number keys to press; the footer keeps the same switch on every page. */
-  @media (max-width: 719px) {
-    .bar .shortcuts { display: none; }
-  }
   /* From 720 to 1279 px the full bar needs about 1040 px, so it tightens to stay on one row. */
   @media (min-width: 720px) and (max-width: 1279px) {
     .bar-in { gap: 10px; }
     .bar .hint { display: none; }
-    .lenses button { padding-inline: 8px; }
-  }
-  /* Below 1024 px the key hints go, and the shortcuts switch moves to the footer's settings group,
-     which shows it in this band. */
-  @media (min-width: 720px) and (max-width: 1023px) {
-    .lenses kbd, .bar .shortcuts { display: none; }
-    .lenses button { padding-inline: 6px; }
   }
 
-
-  .drawer { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(430px, 100vw); overflow-y: auto; overscroll-behavior: contain;
-    background: var(--panel); color: var(--ink); border-left: 1px solid var(--rule); box-shadow: -18px 0 40px -30px rgba(0, 0, 0, 0.45);
-    padding: 20px max(22px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 24px;
-    transform: translateX(102%); visibility: hidden; transition: transform 520ms var(--ease), visibility 0s linear 520ms; }
-  .drawer.open { transform: none; visibility: visible; transition: transform 520ms var(--ease), visibility 0s; }
-  .drawer h2 { font-size: 2.125rem; line-height: 1; font-weight: 720; font-stretch: 82%; margin: 6px 0 14px; outline: none; }
-  .dr-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .dr-sec { border-top: 1px solid var(--rule); padding-top: 12px; margin-top: 16px; }
-  .dr-sec h3 { font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
-  .dr-proofs { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--accent); display: grid; gap: 10px; font-size: 1rem; }
-  .dr-proofs li { display: grid; gap: 2px; }
-  .dr-proofs a, .dr-proofs b { font-weight: 600; }
-  .dr-proofs span { color: var(--muted); font-size: 0.95rem; line-height: 1.4; }
-  .dr-src { margin: 0; }
-  .dr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { font-family: var(--mono); font-size: 0.6875rem; border: 1px solid var(--control-line); padding: 3px 8px; }
-  .chip i { font-style: normal; color: var(--accent); font-weight: 600; margin-right: 6px; }
-  .dr-up, .dr-domains { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 0.95rem; }
-  .dr-up > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; }
-  .dr-up a { overflow-wrap: anywhere; }
-  .dr-st { display: inline-flex; flex-wrap: wrap; justify-content: end; gap: 4px; }
-  .dr-pins { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 1px solid var(--rule); display: grid; gap: 2px; }
-  .dr-domains { display: flex; flex-wrap: wrap; }
-  .dr-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
-  .dr-nav[hidden] { display: none; }
-  @media (min-width: 720px) {
-    /* The side sheet opens below the sticky bar so the lens switcher stays reachable. */
-    .drawer { top: calc(var(--bar-h, 64px) + env(safe-area-inset-top, 0px)); }
-  }
   @media (max-width: 719px) {
     .bar-in { gap: 8px 12px; }
-    /* Keeps the tools on one row beside the mark at 390 px; the shortcut hint means little on touch. */
+    /* Keeps the tools on one row beside the mark at 390 px; the search hint means little on touch. */
     .bar .hint { display: none; }
-    /* One row of five at normal text; with larger text the buttons wrap to a second row instead of
-       squeezing their labels. Each button draws its own top and left rule over the group's border. */
-    .lenses { order: 3; width: 100%; flex-wrap: wrap; }
-    .lenses button { flex: 1 0 auto; padding: 7px 4px; margin: -1px 0 0 -1px; border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
-    .lenses kbd { display: none; }
-    .drawer { top: auto; left: 0; width: auto; max-height: 78vh; border-left: 0; border-top: 1px solid var(--rule); transform: translateY(102%);
-      padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); box-shadow: 0 -18px 40px -30px rgba(0, 0, 0, 0.5); }
-    .drawer h2 { font-size: 1.75rem; }
   }
 
   .pal { position: fixed; inset: 0; z-index: 50; background: color-mix(in srgb, var(--ink) 35%, transparent); display: grid; align-items: start; justify-items: center; padding: 12vh 16px 16px; }
@@ -172,9 +83,5 @@ const islandData = serialiseIslandData(buildIslandData(model, (source) => source
   @media (max-width: 719px) {
     .pal { align-items: end; padding: 0; }
     .pal-box { width: 100%; border-width: 1px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .drawer, .drawer.open { transition: none; }
   }
 </style>

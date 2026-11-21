@@ -1,11 +1,11 @@
 ---
-// Frame for a case-study diagram: inline SVG named by its label, drawn in the current lens.
+// Frame for a case-study diagram: inline SVG named by its label, drawn in the plan style.
 // Two drawings of the same diagram: a wide one (360 units across) and, below 720 px, a narrow one
 // (240 units across, stacked) so text stays at least 11 px for labels and 10 px for second lines
 // on a 390 px phone. Only one is displayed, so assistive tech meets one image.
-// The lens comes from data-lens on the page root (set before first paint on case-study pages);
-// without one the plan lens applies. Nodes and edges draw in when the figure enters the
-// viewport; under reduced motion, or without JavaScript, the settled drawing shows at once.
+// The colours come from the --s-* tokens (the plan values, in src/styles/tokens.css). Nodes and
+// edges draw in when the figure enters the viewport; under reduced motion, or without JavaScript,
+// the settled drawing shows at once.
 interface Props {
   slug: string
   label: string
@@ -54,11 +54,7 @@ const { slug, label, wideHeight, narrowHeight } = Astro.props
 
 <style is:global>
   .dg { --s-faint: color-mix(in srgb, var(--s-line) 8%, transparent); margin: 28px 0 8px; max-width: 640px; padding: 10px; background-color: var(--s-ground); color: var(--s-ink); border: 1px solid var(--rule); }
-  :root[data-lens="terrain"] .dg { --s-faint: color-mix(in srgb, var(--contour) 28%, transparent); }
-  :root[data-lens="console"] .dg { --s-faint: var(--con-band); }
-  :root:not([data-lens]) .dg, :root[data-lens="plan"] .dg { background-image: linear-gradient(var(--s-faint) 1px, transparent 1px), linear-gradient(90deg, var(--s-faint) 1px, transparent 1px); background-size: 16px 16px; }
-  :root[data-lens="terrain"] .dg { background-image: repeating-radial-gradient(circle at 80% 28%, transparent 0 11px, var(--s-faint) 11px 12px); }
-  :root[data-lens="console"] .dg { background-image: repeating-linear-gradient(to bottom, var(--s-faint) 0 18px, transparent 18px 36px); }
+  .dg { background-image: linear-gradient(var(--s-faint) 1px, transparent 1px), linear-gradient(90deg, var(--s-faint) 1px, transparent 1px); background-size: 16px 16px; }
   .dg svg { display: block; width: 100%; height: auto; }
   .dg .dg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
   .dg .dg-n { display: none; }
@@ -77,20 +73,11 @@ const { slug, label, wideHeight, narrowHeight } = Astro.props
   .dg text.sm { font-size: 8.5px; fill: var(--s-muted); }
   .dg text.lft { text-anchor: start; }
   .dg text.rgt { text-anchor: end; }
-  :root:not([data-lens]) .dg text, :root[data-lens="plan"] .dg text { text-transform: uppercase; font-stretch: 80%; font-weight: 700; letter-spacing: 0.02em; }
-  :root:not([data-lens]) .dg text.sm, :root[data-lens="plan"] .dg text.sm { font-weight: 500; text-transform: none; letter-spacing: 0; }
-  :root[data-lens="terrain"] .dg .lk { stroke-dasharray: 5 4; }
-  :root[data-lens="terrain"] .dg .bx { rx: 14px; }
-  :root[data-lens="terrain"] .dg text { font-stretch: 80%; font-weight: 600; }
-  :root[data-lens="console"] .dg text { font-size: 8.5px; }
-  :root[data-lens="console"] .dg text.sm { font-size: 6.5px; }
+  .dg text { text-transform: uppercase; font-stretch: 80%; font-weight: 700; letter-spacing: 0.02em; }
+  .dg text.sm { font-weight: 500; text-transform: none; letter-spacing: 0; }
   /* Narrow drawing: sizes in its 240-unit space; at 390 px it scales by 1.4. */
   .dg .dg-n text { font-size: 8.5px; }
   .dg .dg-n text.sm { font-size: 7.5px; }
-  :root[data-lens="console"] .dg .dg-n text { font-size: 8px; }
-  :root[data-lens="console"] .dg .dg-n text.sm { font-size: 7.5px; }
-  :root[data-lens="console"] .dg .bx { stroke-dasharray: 2 2; }
-  :root[data-lens="index"] .dg .bx, :root[data-lens="range"] .dg .bx, :root[data-lens="index"] .dg .lk, :root[data-lens="range"] .dg .lk { stroke-width: 1; }
 
   /* Draw-in: nodes rise in 50 ms apart, then edges trace and their labels fade in. */
   @media (prefers-reduced-motion: no-preference) {

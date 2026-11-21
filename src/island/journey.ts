@@ -2,8 +2,7 @@
 // motion allowed this module empties it, and as each stop reaches the upper part of the viewport
 // its new chips fly into the toolkit (transform and opacity only, no scroll hijack). The toolkit
 // only grows: scrolling back up never empties a slot. Reduced motion keeps the complete toolkit.
-import { EASE } from './lenses/shared'
-import { onReducedMotionChange, prefersReducedMotion } from './motion'
+import { EASE, onReducedMotionChange, prefersReducedMotion } from './motion'
 
 const FLY_MS = 700
 const FLY_STAGGER_MS = 45

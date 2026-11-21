@@ -2,8 +2,7 @@
   --paper: #F2F3EF; --ink: #141A22; --muted: #535A62; --rule: #C3C8C9; --accent: #1C39D4; --panel: #E6E8E3;
   --control-line: #7A8188;
   --plan-ground: #EEF2F4; --plan-ink: #13233A; --plan-muted: #4A5A6E; --plan-line: #13233A; --plan-acc: #B8321F;
-  --ter-ground: #EEF1EC; --ter-ink: #1C2A20; --ter-muted: #4B5A4F; --contour: #9A7B55; --summit: #2F6B47; --water: #2F6A8C;
-  --con-ground: #F3F4EE; --con-band: #E3E9DD; --con-ink: #1A1F1A; --con-muted: #555E57; --con-acc: #1C39D4;
+  --ter-ground: #EEF1EC; --contour: #9A7B55; --water: #2F6A8C;
   --display: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Newsreader", Georgia, "Times New Roman", serif;
   --mono: "Martian Mono", "Martian Mono Fallback", "Martian Mono Fallback Consolas", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -16,8 +15,7 @@
     --paper: #0F1112; --ink: #ECEDE8; --muted: #A4A9A2; --rule: #30353A; --accent: #8EA1FF; --panel: #171A1C;
     --control-line: #6E767D;
     --plan-ground: #0B2A4A; --plan-ink: #EAF2F9; --plan-muted: #A9C1D8; --plan-line: #DCE8F3; --plan-acc: #FF9C85;
-    --ter-ground: #111813; --ter-ink: #E6EEE7; --ter-muted: #A6B5A9; --contour: #A88B66; --summit: #7FC79A; --water: #7DB6D6;
-    --con-ground: #0D0F12; --con-band: #15191E; --con-ink: #E7E9EC; --con-muted: #9AA3AD; --con-acc: #E2A33B;
+    --ter-ground: #111813; --contour: #A88B66; --water: #7DB6D6;
   }
 }
 
@@ -25,13 +23,9 @@
   --paper: #0F1112; --ink: #ECEDE8; --muted: #A4A9A2; --rule: #30353A; --accent: #8EA1FF; --panel: #171A1C;
   --control-line: #6E767D;
   --plan-ground: #0B2A4A; --plan-ink: #EAF2F9; --plan-muted: #A9C1D8; --plan-line: #DCE8F3; --plan-acc: #FF9C85;
-  --ter-ground: #111813; --ter-ink: #E6EEE7; --ter-muted: #A6B5A9; --contour: #A88B66; --summit: #7FC79A; --water: #7DB6D6;
-  --con-ground: #0D0F12; --con-band: #15191E; --con-ink: #E7E9EC; --con-muted: #9AA3AD; --con-acc: #E2A33B;
+  --ter-ground: #111813; --contour: #A88B66; --water: #7DB6D6;
 }
 
-:root, [data-lens="plan"] { --s-ground: var(--plan-ground); --s-ink: var(--plan-ink); --s-muted: var(--plan-muted); --s-line: var(--plan-line); --s-acc: var(--plan-acc); --s-font: var(--display); }
-[data-lens="terrain"] { --s-ground: var(--ter-ground); --s-ink: var(--ter-ink); --s-muted: var(--ter-muted); --s-line: var(--water); --s-acc: var(--summit); --s-font: var(--display); }
-[data-lens="console"] { --s-ground: var(--con-ground); --s-ink: var(--con-ink); --s-muted: var(--con-muted); --s-line: var(--con-muted); --s-acc: var(--con-acc); --s-font: var(--mono); }
-[data-lens="index"] { --s-ground: var(--panel); --s-ink: var(--ink); --s-muted: var(--muted); --s-line: var(--accent); --s-acc: var(--accent); --s-font: var(--body); }
-/* Range is a matrix over the same paper as Index; its cells, not its ground, carry the lens. */
-[data-lens="range"] { --s-ground: var(--panel); --s-ink: var(--ink); --s-muted: var(--muted); --s-line: var(--accent); --s-acc: var(--accent); --s-font: var(--body); }
+:root { --s-ground: var(--plan-ground); --s-ink: var(--plan-ink); --s-muted: var(--plan-muted); --s-line: var(--plan-line); --s-acc: var(--plan-acc); --s-font: var(--display); }
+/* The site-plan sheet. Each points at a token that already has a dark value, so the sheet follows the theme. */
+:root { --sh-ground: var(--ter-ground); --sh-line: var(--plan-line); --sh-contour: var(--contour); --sh-trail: var(--water); --sh-select: var(--plan-acc); }

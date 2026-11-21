@@ -1,7 +1,7 @@
 import { UPSTREAM_MAP, type UpstreamLink } from '../data/upstream-map'
 import type { DomainId, Upstream } from '../model/schema'
 
-// One upstream repo as every list on the site shows it: the Upstream ledger, the proof drawer and
+// One upstream repo as every list on the site shows it: the Upstream ledger, the sheet's readout and
 // the no-JS hero list all read these rows, so they agree on repos, labels and statuses.
 export type UpstreamRow = {
   label: string

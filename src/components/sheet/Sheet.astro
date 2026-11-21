@@ -1,0 +1,503 @@
+---
+// The site-plan sheet: one drawing of the areas of work, with its methods, schedule, legend, title
+// block and materials schedule. Rendered whole at build time from the model and the pure geometry in
+// src/lib/sheet.ts, so the browser computes nothing. Two drawings ship, wide and tall; CSS shows the
+// one that fits. The summits (as links) and the trail tags render once, as HTML, placed over either
+// drawing by custom properties.
+import { model } from '../../model'
+import { buildIslandData } from '../../island/data'
+import { sourceLabel } from '../../lib/provenance'
+import { languages, proofById, upstream } from '../../lib/site'
+import { LAYOUTS, contourLines, methodsOfDomain, scheduleCells, sheetTrails, spots, type ContourLine, type SheetShape } from '../../lib/sheet'
+import SourceTag from '../SourceTag.astro'
+
+const data = buildIslandData(model, (source) => sourceLabel(source), upstream)
+const SHAPES: SheetShape[] = ['wide', 'tall']
+for (const shape of SHAPES) {
+  if (LAYOUTS[shape].summits.length !== model.domains.length) throw new Error(`Sheet: the ${shape} layout has no summit for every domain`)
+}
+
+const pad = (value: number) => String(value).padStart(2, '0')
+const numberOf = (domainId: string) => pad(model.domains.findIndex((domain) => domain.id === domainId) + 1)
+const proofCount = (count: number) => `${count} ${count === 1 ? 'proof' : 'proofs'}`
+
+// The materials schedule keeps the bill of materials' bands. The two middle bands use the toolkit's
+// set names (Journey), so a part sits in the same group in both.
+const BANDS = [
+  { id: 'language', label: 'Primary languages', part: 'L' },
+  { id: 'stack', label: 'Frameworks and stacks', part: 'F' },
+  { id: 'tool', label: 'Platforms and tools', part: 'T' },
+  { id: 'discipline', label: 'Disciplines', part: 'D' },
+] as const
+const areaNumbers = (proofIds: string[]) =>
+  model.domains.filter((domain) => proofIds.some((id) => proofById(id).domainId === domain.id)).map((domain) => numberOf(domain.id))
+
+// Short column heads for the schedule; the full mode name is what a screen reader hears.
+const MODE_SHORT: Record<string, string> = { build: 'Bld', architect: 'Arc', research: 'Res', teach: 'Tch' }
+function modeShort(id: string): string {
+  const short = MODE_SHORT[id]
+  if (!short) throw new Error(`Sheet: no short column head for mode ${id}`)
+  return short
+}
+
+// The contours grouped by level, lowest first, so the intro can draw them outward from the summits.
+function byLevel(lines: ContourLine[]): { level: number; lines: ContourLine[] }[] {
+  const groups = new Map<number, ContourLine[]>()
+  for (const line of lines) groups.set(line.level, [...(groups.get(line.level) ?? []), line])
+  return [...groups].map(([level, grouped]) => ({ level, lines: grouped }))
+}
+
+const spotted = spots(data)
+const drawings = SHAPES.map((shape) => ({ layout: LAYOUTS[shape], levels: byLevel(contourLines(LAYOUTS[shape])), trails: sheetTrails(data, LAYOUTS[shape]) }))
+
+const summits = model.domains.map((domain, position) => ({
+  id: domain.id,
+  name: domain.name,
+  number: pad(position + 1),
+  count: proofCount(data.proofs.filter((proof) => proof.domainId === domain.id).length),
+  letters: methodsOfDomain(data, domain.id),
+  spots: spotted.filter((spot) => spot.domainId === domain.id).map((spot) => spot.methodId),
+  style: SHAPES.map((shape) => {
+    const { summits: points } = LAYOUTS[shape]
+    const [x, y] = points[position]
+    return `--x-${shape}:${x};--y-${shape}:${y}`
+  }).join(';'),
+}))
+
+// The trail tags render once, as HTML placed like the summits, so their letters keep the site's
+// text floor however small the drawing scales. Every layout draws the same trails.
+const tags = drawings[0].trails.map(({ methodId }) => ({
+  methodId,
+  style: drawings
+    .map(({ layout, trails }) => {
+      const trail = trails.find((item) => item.methodId === methodId)
+      if (!trail) throw new Error(`Sheet: the ${layout.shape} layout has no trail for method ${methodId}`)
+      return `--x-${layout.shape}:${trail.tag[0]};--y-${layout.shape}:${trail.tag[1]}`
+    })
+    .join(';'),
+}))
+
+const methodRows = model.methods.map((method) => {
+  const areas = model.domains.filter((domain) => methodsOfDomain(data, domain.id).includes(method.id)).map((domain) => numberOf(domain.id))
+  return { id: method.id, name: method.name, areas, spot: areas.length === 1, trail: areas.length >= 2 }
+})
+
+const cells = new Map(scheduleCells(data).map((cell) => [`${cell.domainId}/${cell.mode}`, cell.count]))
+const cellCount = (domainId: string, mode: string) => cells.get(`${domainId}/${mode}`) ?? 0
+// The drawings' own dimensions, so the CSS that places and scales them reads the geometry, not copies.
+const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width};--${shape}-h:${LAYOUTS[shape].height};--${shape}-core:${LAYOUTS[shape].core}`)
+  .concat(`--tall-core-w:${LAYOUTS.tall.coreWidth}`)
+  .join(';')
+---
+
+{/* The intro's controls sit above the sheet's frame, clear of the drawing. Skip keeps its room while
+    hidden, so showing it moves nothing. */}
+<div class="sheet-cap js-only">
+  <button class="tool" type="button" id="intro-skip" hidden>Skip intro</button>
+  <button class="tool" type="button" id="intro-replay">Replay intro</button>
+</div>
+<div class="sheet" id="sheet">
+  <div class="plot">
+    <p class="dim" data-phase="frame"><span class="dim-label">{model.domains.length} areas of work / {model.proofs.length} proof items</span></p>
+    <div class="sheet-drawing" style={drawingStyle}>
+      {
+        drawings.map(({ layout, levels, trails }) => (
+          <svg data-shape={layout.shape} viewBox={`0 0 ${layout.width} ${layout.height}`} aria-hidden="true" focusable="false">
+            <g class="contours" data-phase="contours">
+              {levels.map(({ level, lines }) => (
+                <g data-level={level}>
+                  {lines.map((line) => (
+                    <path class={line.index ? 'contour index' : 'contour'} d={line.d} />
+                  ))}
+                </g>
+              ))}
+            </g>
+            <g data-phase="trails">
+              <g class="trails">
+                {trails.map((trail) => (
+                  <path class="trail" data-method={trail.methodId} d={trail.d} />
+                ))}
+              </g>
+            </g>
+          </svg>
+        ))
+      }
+      <div class="tags" data-phase="trails" aria-hidden="true">
+        {
+          tags.map((tag) => (
+            <span class="tag" data-method={tag.methodId} style={tag.style}>{tag.methodId}</span>
+          ))
+        }
+      </div>
+      <ol class="summits" data-phase="summits">
+        {
+          summits.map((summit) => (
+            <li>
+              <a class="summit" data-summit={summit.id} href={`#area-${summit.id}`} style={summit.style}>
+                <span class="peak" aria-hidden="true" />
+                <span class="no" aria-hidden="true">{summit.number}</span>
+                <span class="name">{summit.name}</span>
+                <span class="meta">
+                  <span class="count">{summit.count}</span>
+                  {summit.letters.length > 0 && (
+                    <>
+                      <span class="sep">{' '}</span>
+                      {/* The painted slash is silent, so a screen reader hears the letters named. */}
+                      <span class="sr-only">, methods</span>
+                      <span class="letters">
+                        {summit.letters.map((letter) => (
+                          <i data-letter={letter} class={summit.spots.includes(letter) ? 'spot' : undefined}>{letter}</i>
+                        ))}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+      <div class="north" data-phase="frame" aria-hidden="true">
+        <svg viewBox="0 0 16 22" width="14" height="19"><path d="M8 1 14 20 8 15 2 20Z" /></svg>
+        N
+      </div>
+      <div class="datum" data-phase="frame">
+        <b>Datum / built in</b>
+        <span>{languages.map((name) => <em>{name}</em>)}</span>
+      </div>
+    </div>
+    <button type="button" class="cmd js-only" id="sheet-cmd" aria-haspopup="dialog" aria-controls="palette">
+      <span class="sr-only">Search: </span>
+      <span class="ps" aria-hidden="true">$</span>
+      <span data-cmd-text>kp open</span>
+      <span class="caret" aria-hidden="true"></span>
+      <span class="hint">type an area, a proof or a method</span>
+    </button>
+  </div>
+
+  {/* The readout follows the command line: under it on a phone, and across the sheet under the
+      drawing row on a desktop, so opening an area never jumps past the materials schedule. */}
+  <section class="readout" id="readout" aria-labelledby="readout-h" hidden>
+    <h3 id="readout-h" class="sr-only">Readout</h3>
+  </section>
+
+  <div class="side">
+    <div class="blk">
+      <h3>Methods / trails</h3>
+      <table class="meth">
+        <thead>
+          <tr><th scope="col">Rev</th><th scope="col">Method</th><th scope="col">Trail</th><th scope="col">Areas</th></tr>
+        </thead>
+        <tbody>
+          {
+            methodRows.map((row) => (
+              <tr data-method={row.id}>
+                <td class="rev">{row.id}</td>
+                <td class="mname">{row.name}</td>
+                <td>{(row.trail || row.spot) && <span class={row.spot ? 'swatch spot' : 'swatch'} aria-hidden="true" />}<span class="sr-only">{row.spot ? 'Spot' : row.trail ? 'Trail' : ''}</span></td>
+                <td class="areas">{row.areas.join(', ')}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="blk">
+      <h3>Schedule / areas by mode</h3>
+      <table class="sched" data-phase="schedule">
+        <thead>
+          <tr>
+            <th scope="col">Area</th>
+            {
+              model.modes.map((mode) => (
+                <th scope="col" class="c"><span aria-hidden="true">{modeShort(mode.id)}</span><span class="sr-only">{mode.name}</span></th>
+              ))
+            }
+          </tr>
+        </thead>
+        <tbody>
+          {
+            model.domains.map((domain) => (
+              <tr>
+                <th scope="row"><span aria-hidden="true">{numberOf(domain.id)} {domain.name.split(' ')[0]}</span><span class="sr-only">{domain.name}</span></th>
+                {model.modes.map((mode) => {
+                  const count = cellCount(domain.id, mode.id)
+                  return <td class="c" data-cell={`${domain.id}/${mode.id}`}>{count > 0 ? <span class="cell f">{count}</span> : <span class="cell e" />}</td>
+                })}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+      <p class="to-range"><a href="#range">Every proof, in the Range table below</a></p>
+    </div>
+    <div class="blk legend">
+      <h3>Legend</h3>
+      <div><span class="peak" aria-hidden="true" />Summit: one area of work</div>
+      <div><span class="ring" aria-hidden="true" />Contours: the ground each area covers</div>
+      <div><span class="swatch" aria-hidden="true" />Trail: a method two or more areas share</div>
+      <div><span class="swatch spot" aria-hidden="true" />Spot: a method one area uses</div>
+    </div>
+    <div class="title-block">
+      <div class="big">Site plan</div>
+      <div><small>Drawing</small>KP-001</div>
+      <div><small>Sheet</small>1 of 1</div>
+      <div><small>Scale</small>Counts, not measures</div>
+      <div><small>Areas / proofs</small><span data-totals>{model.domains.length} / {model.proofs.length}</span></div>
+    </div>
+  </div>
+
+  <section class="materials" aria-labelledby="materials-h">
+    <div class="mat-head">
+      <h3 id="materials-h">Materials schedule</h3>
+      <span class="mat-cols" aria-hidden="true">Part / material / where used / areas</span>
+    </div>
+    <div class="mat-bands" data-phase="materials">
+      {
+        BANDS.map((band) => (
+          <div class="mat-band" data-band={band.id}>
+            <h4>{band.label}</h4>
+            <ol>
+              {model.materials
+                .filter((material) => material.band === band.id)
+                .map((material, position) => (
+                  <li data-material={material.id} data-claim-id={`material-${material.id}`}>
+                    <div class="mat-row">
+                      <span class="pn" aria-hidden="true">{`${band.part}${position + 1}`}</span>
+                      <span class="mt">{material.name}</span>
+                      <span class="used">{material.usedIn.map((id) => proofById(id).label).join('; ')}</span>
+                      <span class="dm" aria-hidden="true">
+                        {areaNumbers(material.usedIn).map((number) => (
+                          <i>{number}</i>
+                        ))}
+                      </span>
+                    </div>
+                    <SourceTag source={material.source} />
+                  </li>
+                ))}
+            </ol>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+</div>
+
+<style>
+  .sheet-cap { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+  #intro-skip[hidden] { display: inline-block; visibility: hidden; }
+  .sheet { display: grid; grid-template-columns: minmax(0, 1fr); background: var(--sh-ground); color: var(--sh-line); border: 1.5px solid var(--sh-line);
+    scroll-margin-top: calc(var(--bar-h, 0px) + 12px); }
+  .plot { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }
+
+  /* The dimension line counts rather than measures: a rule with end ticks, the label on a gap. */
+  .dim { position: relative; display: grid; place-items: center; margin: 0 18px; padding-block: 10px 6px; }
+  .dim::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% + 2px); border-top: 1px solid var(--sh-line); }
+  .dim::after { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 4px); height: 12px; border-inline: 1px solid var(--sh-line); }
+  .dim-label { position: relative; z-index: 1; padding: 0 8px; background: var(--sh-ground); font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; }
+
+  /* Both drawings scale uniformly: one factor, --s, for x and y, so circles stay circles. The wide
+     drawing fills its desktop cell, whose shape follows the right column: its 800-unit core (the
+     summits) always fits the cell, and its taller field of ground covers the rest and is cropped. */
+  .sheet-drawing { position: relative; container-type: size; flex: 1 0 auto; min-height: calc(100cqi * var(--wide-core) / var(--wide-w)); overflow: hidden;
+    --s: min(100cqw / var(--wide-w), 100cqh / var(--wide-core)); }
+  .sheet-drawing > svg { position: absolute; display: block; width: calc(var(--wide-w) * var(--s)); height: calc(var(--wide-h) * var(--s));
+    left: calc(50cqw - var(--wide-w) * var(--s) / 2); top: calc(50cqh - var(--wide-h) * var(--s) / 2); }
+  .sheet-drawing > svg[data-shape="tall"] { display: none; }
+  .contour { fill: none; stroke: var(--sh-contour); stroke-width: 0.9; opacity: 0.75; vector-effect: non-scaling-stroke; }
+  .contour.index { stroke-width: 1.6; opacity: 1; }
+  .trail { fill: none; stroke: var(--sh-trail); stroke-width: 1.6; stroke-dasharray: 2 5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  /* A trail's circled letter, centred on its point on the curve. The letter scales with the drawing,
+     11 units as drawn, but never below the 10 px text floor; the ring keeps the drawn 20-unit size. */
+  .tag { position: absolute; left: calc(50cqw + (var(--x-wide) - var(--wide-w) / 2) * var(--s)); top: calc(50cqh + (var(--y-wide) - var(--wide-h) / 2) * var(--s));
+    translate: -50% -50%; display: grid; place-items: center; box-sizing: border-box; width: calc(20em / 11); height: calc(20em / 11);
+    border: 1.3px solid var(--sh-trail); border-radius: 50%; background: var(--sh-ground); color: var(--sh-trail);
+    font-family: var(--mono); font-size: max(calc(0.25rem + 6px), 11 * var(--s)); font-weight: 600; line-height: 1; }
+  /* A lit trail, from its row in the methods table: solid and heavier, its tag filled. */
+  .trail.on { stroke-dasharray: none; stroke-width: 2.6; }
+  .tag.on { background: var(--sh-trail); color: var(--sh-ground); }
+
+  .summits { list-style: none; margin: 0; padding: 0; }
+  /* Each label hangs under its peak marker, whose centre (6 px down the 12 px peak) sits on the
+     summit point, where the trails end. Sized in container units so it keeps its share of the
+     drawing at every width. */
+  .summit { position: absolute; left: calc(50cqw + (var(--x-wide) - var(--wide-w) / 2) * var(--s)); top: calc(50cqh + (var(--y-wide) - var(--wide-h) / 2) * var(--s));
+    width: calc(240 * var(--s)); transform: translate(-50%, -6px);
+    display: grid; justify-items: center; gap: 3px; text-align: center; color: var(--sh-line); text-decoration: none; }
+  .summit .peak { width: 0; height: 0; border-inline: 7px solid transparent; border-bottom: 12px solid var(--sh-line); }
+  /* Label text grows with the reader's text size, at half rate on top of a fixed part, so a label at
+     200 % text still fits the room the geometry leaves between summits. */
+  .summit .no { display: grid; place-items: center; width: 2.2em; height: 2.2em; border: 1px solid var(--sh-line); border-radius: 50%; background: var(--sh-ground);
+    font-family: var(--mono); font-size: calc(0.25rem + 6px); }
+  .summit .name { display: block; max-width: 100%; font-family: var(--display); font-weight: 750; font-stretch: 82%; font-size: calc(0.5rem + 17 * var(--s)); line-height: 1.04;
+    text-wrap: balance; overflow-wrap: anywhere; hyphens: auto; text-shadow: 0 0 6px var(--sh-ground), 0 0 3px var(--sh-ground), 0 0 2px var(--sh-ground); }
+  /* The proof count and the method letters are units that never break inside. The one place the
+     line may wrap is the space between them, and the slash is painted on that space, so a wrap
+     drops it with the space instead of leaving it at either end of a line. */
+  .summit .meta { display: block; max-width: 100%; text-align: center; font-family: var(--mono); font-size: calc(0.3125rem + 6px);
+    letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); text-shadow: 0 0 4px var(--sh-ground), 0 0 2px var(--sh-ground); }
+  .summit .count { white-space: nowrap; }
+  .summit .sep { word-spacing: 1.2em;
+    background: linear-gradient(to bottom right, transparent calc(50% - 0.6px), currentColor calc(50% - 0.6px) calc(50% + 0.6px), transparent calc(50% + 0.6px)) center / 0.5em 0.9em no-repeat; }
+  .summit .letters { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+  .summit .letters i { font-style: normal; }
+  /* A spot: a method only this area uses, ringed in the trail colour. The ring is taller than the
+     line, so its block margin keeps it clear of the name above as well as the letters beside it. */
+  .summit .letters i.spot { display: inline-grid; place-items: center; min-width: 1.7em; height: 1.7em; margin-block: 2px; border: 1.5px solid var(--sh-trail); border-radius: 50%; color: var(--sh-trail); }
+  .summit:hover .name, .summit:focus-visible .name, .summit[aria-current="true"] .name { color: var(--sh-select); }
+  .summit:hover .peak, .summit:focus-visible .peak, .summit[aria-current="true"] .peak { border-bottom-color: var(--sh-select); }
+  .summit[aria-current="true"] .no { border-color: var(--sh-select); color: var(--sh-select); }
+  .summit:focus-visible { outline: 1px dashed var(--sh-select); outline-offset: 4px; }
+
+  .north { position: absolute; right: 12px; bottom: 12px; display: grid; justify-items: center; gap: 2px; font-family: var(--mono); font-size: 0.625rem; }
+  .north path { fill: currentColor; }
+  /* 44 % of the width keeps the box clear of the tall sheet's right column, whose labels start at 51 %. */
+  .datum { position: absolute; left: 12px; bottom: 12px; max-width: 44cqi; display: grid; gap: 4px; padding: 6px 8px; border: 1px solid var(--sh-line); background: var(--sh-ground);
+    font-family: var(--mono); font-size: calc(0.25rem + 6px); }
+  .datum b { font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .datum span { display: flex; flex-wrap: wrap; gap: 4px; }
+  .datum em { font-style: normal; padding: 1px 5px; border: 1px solid var(--sh-line); overflow-wrap: anywhere; }
+
+  /* The command line along the foot of the drawing opens search. Its name starts "Search:" for a
+     screen reader, since the hint is hidden on a phone. The caret blinks four times, then holds. */
+  .cmd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: 100%; margin-top: auto; padding: 12px 16px; border: 0; border-top: 1px solid var(--sh-line);
+    background: var(--sh-ground); color: var(--ink); font-family: var(--mono); font-size: 0.8125rem; text-align: left; cursor: text; }
+  .cmd .ps { color: var(--accent); font-weight: 600; }
+  .cmd .caret { display: inline-block; width: 0.6em; height: 1.15em; background: var(--ink); animation: caret-blink 1.1s steps(1) 4; }
+  .cmd .hint { margin-left: auto; color: var(--muted); font-size: 0.6875rem; }
+  .cmd:focus-visible { outline: 2px solid var(--sh-select); outline-offset: -3px; }
+  @keyframes caret-blink { 50% { opacity: 0; } }
+
+  /* The right column is 300 px on a desktop, so its text grows with the reader's text size at half
+     rate, like the summit labels, and cell words may break rather than widen the page. */
+  .side { display: grid; align-content: start; min-width: 0; font-family: var(--mono); font-size: calc(0.3125rem + 6px); }
+  .blk { padding: 12px 14px; border-top: 1px solid var(--sh-line); }
+  .side h3, .mat-head h3 { margin: 0 0 8px; font-family: var(--mono); font-size: calc(0.25rem + 6px); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .side table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .side th, .side td { padding: 4px; border-top: 1px solid color-mix(in srgb, var(--sh-line) 30%, transparent); text-align: left; vertical-align: middle; font-weight: 400; }
+  .side td, .side tbody th { overflow-wrap: anywhere; }
+  .side thead th { border-top: 0; color: var(--muted); font-size: calc(0.25rem + 6px); letter-spacing: 0.04em; white-space: nowrap; }
+  .rev { width: 2em; font-weight: 600; }
+  .meth tbody tr.on { background: color-mix(in srgb, var(--sh-select) 9%, var(--sh-ground)); }
+  .meth tbody tr:focus-visible { outline: 2px solid var(--sh-select); outline-offset: -2px; }
+  .swatch { display: inline-block; width: 34px; height: 0; border-top: 2px dotted var(--sh-trail); vertical-align: middle; }
+  .swatch.spot { width: 9px; height: 9px; border: 1.5px solid var(--sh-trail); border-radius: 50%; }
+  .sched .c { width: 2.6em; text-align: center; }
+  .cell { display: inline-grid; place-items: center; width: 2em; height: 2em; font-size: 0.625rem; }
+  .cell.f { background: var(--sh-line); color: var(--sh-ground); }
+  .cell.e { border: 1px solid color-mix(in srgb, var(--sh-line) 25%, transparent); }
+  .to-range { margin: 8px 0 0; }
+  .side a, .materials a { color: var(--accent); }
+  .legend { display: grid; gap: 6px; }
+  .legend h3 { margin-bottom: 2px; }
+  .legend > div { display: flex; align-items: center; gap: 8px; }
+  .legend .peak { flex: none; width: 0; height: 0; border-inline: 5px solid transparent; border-bottom: 9px solid var(--sh-line); }
+  .legend .ring { flex: none; width: 18px; height: 10px; border: 1px solid var(--sh-contour); border-radius: 50%; }
+  .legend .swatch { flex: none; }
+  .title-block { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid var(--sh-line); }
+  .title-block > div { min-width: 0; padding: 8px 14px; border-top: 1px solid var(--sh-line); overflow-wrap: anywhere; }
+  .title-block > div:nth-child(even) { border-right: 1px solid var(--sh-line); }
+  .title-block .big { grid-column: 1 / -1; border-top: 0; padding-top: 12px; font-family: var(--display); font-stretch: 82%; font-weight: 750; font-size: 1.375rem; }
+  .title-block small { display: block; color: var(--muted); font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* The materials schedule: the bill of materials drawn in the sheet's line work. Static rows without
+     the island; the island turns each row into a button. */
+  .materials { border-top: 1.5px solid var(--sh-line); font-family: var(--mono); }
+  .mat-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 12px 14px 4px; }
+  .mat-head h3 { margin: 0; }
+  .mat-cols { font-size: 0.625rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .mat-bands { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .mat-band { border-top: 1px solid var(--sh-line); }
+  .mat-band h4 { margin: 0; padding: 8px 14px 4px; font-family: var(--mono); font-size: 0.625rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .mat-band ol { list-style: none; margin: 0; padding: 0; }
+  .mat-band li + li { border-top: 1px solid color-mix(in srgb, var(--sh-line) 30%, transparent); }
+  /* The island swaps each row for a button it builds, which carries no scoped attribute; the row
+     rules are global under .materials so the static row and the button look the same. */
+  .materials :global(.mat-row) { display: grid; grid-template-columns: 3ch minmax(0, min(12rem, 35%)) minmax(0, 1fr) auto; gap: 4px 14px; align-items: baseline; width: 100%; margin: 0;
+    padding: 8px 14px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.6875rem; line-height: 1.5; text-align: left; }
+  .materials :global(button.mat-row) { cursor: pointer; }
+  .materials :global(button.mat-row:hover), .materials :global(button.mat-row[aria-current="true"]) { background: color-mix(in srgb, var(--sh-select) 9%, var(--sh-ground)); }
+  .materials :global(button.mat-row[aria-current="true"]) .mt { color: var(--sh-select); }
+  .materials :global(button.mat-row:focus-visible) { outline: 2px solid var(--sh-select); outline-offset: -2px; }
+  .pn, .used { color: var(--muted); }
+  .mt { font-family: var(--display); font-stretch: 80%; font-weight: 700; font-size: 0.9375rem; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .used { overflow-wrap: anywhere; }
+  .dm { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+  .dm i { padding: 0 4px; border: 1px solid var(--sh-line); font-size: 0.625rem; font-style: normal; }
+  .mat-band :global(.src-tag) { padding: 0 14px 8px calc(3ch + 28px); }
+
+  /* The readout is built by the island, so its rules are global under .readout. */
+  .readout { display: grid; gap: 6px; min-width: 0; padding: 14px 16px 18px; border-top: 1.5px solid var(--sh-line); font-family: var(--mono); font-size: 0.8125rem; color: var(--ink);
+    scroll-margin: calc(var(--bar-h, 0px) + 12px) 0 12px; }
+  /* The island unhides it; without JavaScript it takes no room, and display: grid above would
+     otherwise override the hidden attribute. */
+  .readout[hidden] { display: none; }
+  .readout :global(.ro-cmd) { margin: 0; }
+  .readout :global(.ps) { color: var(--accent); font-weight: 600; }
+  .readout :global(#readout-h) { margin: 0; font-family: var(--mono); font-size: 0.9375rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; outline: none; }
+  .readout :global(.ro-out) { margin: 0; color: var(--muted); }
+  .readout :global(a) { color: var(--accent); overflow-wrap: anywhere; }
+  .readout :global(.ro-tree), .readout :global(.ro-proofs) { list-style: none; margin: 4px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--sh-select); display: grid; gap: 6px; }
+  .readout :global(.ro-tree button) { display: grid; grid-template-columns: 3ch minmax(0, 1fr) auto; gap: 12px; align-items: baseline; width: 100%; padding: 4px 6px; border: 0;
+    background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .readout :global(.ro-tree button:hover) { background: color-mix(in srgb, var(--sh-select) 9%, var(--sh-ground)); }
+  .readout :global(.ro-tree button:focus-visible) { outline: 2px solid var(--sh-select); outline-offset: -2px; }
+  .readout :global(.ro-no), .readout :global(.ro-count) { color: var(--muted); }
+  .readout :global(.ro-name) { overflow-wrap: anywhere; }
+  .readout :global(.ro-proofs > li) { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; min-width: 0; }
+  .readout :global(.ro-pname) { font-weight: 600; overflow-wrap: anywhere; }
+  .readout :global(.ro-modes) { color: var(--muted); font-size: 0.6875rem; }
+  .readout :global(.ro-detail) { flex-basis: 100%; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+  .readout :global(.ro-proofs .src-tag) { flex-basis: 100%; margin-top: 0; }
+  .readout :global(.ro-sec) { display: grid; gap: 6px; margin-top: 10px; }
+  .readout :global(.ro-sec h4) { margin: 0; font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .readout :global(.ro-chips), .readout :global(.ro-areas) { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+  .readout :global(.ro-chip) { border: 1px solid var(--control-line); padding: 3px 8px; font-size: 0.6875rem; }
+  .readout :global(.ro-chip i) { font-style: normal; color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .readout :global(.ro-up) { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .readout :global(.ro-up > li) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; }
+  .readout :global(.ro-st) { display: inline-flex; flex-wrap: wrap; justify-content: end; gap: 4px; }
+  .readout :global(.ro-pins) { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0 0 0 12px; border-left: 1px solid var(--rule); display: grid; gap: 2px; }
+  .readout :global(.ro-nav) { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+  @media (min-width: 861px) {
+    .sheet { grid-template-columns: minmax(0, 1fr) 300px; }
+    .plot { border-right: 1px solid var(--sh-line); }
+    .side .blk:first-child { border-top: 0; }
+    .plot { grid-column: 1; grid-row: 1; }
+    .side { grid-column: 2; grid-row: 1; }
+    .readout { grid-column: 1 / -1; grid-row: 2; }
+    .materials { grid-column: 1 / -1; grid-row: 3; }
+  }
+  @media (min-width: 1100px) {
+    .mat-bands { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .mat-band:nth-child(even) { border-left: 1px solid var(--sh-line); }
+  }
+  /* Below 861 px the drawing is the tall sheet and every block stacks under it. */
+  @media (max-width: 860px) {
+    /* The tall drawing's 360-unit core spans the cell up to 560 px, then stops growing, so a tablet
+       sheet keeps a readable height. The box is the drawing's full height at that scale, and the
+       field, wider than its core, is centred in it and covers the rest of the cell's width. */
+    .sheet-drawing { container-type: inline-size; flex: none; min-height: 0; --s: calc(min(100cqi, 560px) / var(--tall-core-w)); height: calc(var(--tall-h) * var(--s)); }
+    .sheet-drawing > svg[data-shape="wide"] { display: none; }
+    .sheet-drawing > svg[data-shape="tall"] { display: block; left: calc(50cqw - var(--tall-w) * var(--s) / 2); top: 0; width: calc(var(--tall-w) * var(--s)); height: calc(var(--tall-h) * var(--s)); }
+    /* 150 units wide: narrower than the gap between the zigzag's columns, so labels never meet across it. */
+    .summit { left: calc(50cqw + (var(--x-tall) - var(--tall-w) / 2) * var(--s)); top: calc(var(--y-tall) * var(--s)); width: calc(150 * var(--s)); }
+    /* The name grows by 3.1 % of the core's drawn width: 11.16 of its 360 units. */
+    .summit .name { font-size: calc(0.5rem + 11.16 * var(--s)); }
+    .tag { left: calc(50cqw + (var(--x-tall) - var(--tall-w) / 2) * var(--s)); top: calc(var(--y-tall) * var(--s)); font-size: max(calc(0.25rem + 6px), 11 * var(--s)); }
+    .materials :global(.mat-row) { grid-template-columns: 3ch minmax(0, 1fr) auto; }
+    .used, .dm { grid-column: 2 / -1; }
+    .mat-cols { display: none; }
+  }
+  @media (max-width: 519px) {
+    .cmd .hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cmd .caret { animation: none; }
+    /* Nothing to replay. Skip stays laid out while shown, so the intro can hand its focus on when
+       reduced motion turns on mid-intro; otherwise the row folds away. */
+    #intro-replay { display: none; }
+    .sheet-cap:not(:has(#intro-skip:not([hidden]))) { display: none; }
+  }
+</style>

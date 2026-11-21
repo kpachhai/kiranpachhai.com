@@ -7,7 +7,7 @@ type DomainId = (typeof DOMAIN_IDS)[number]
 export type UpstreamLink = { href: string; note: string }
 
 // Hand-curated: public repo full name -> neutral ledger label and domain, plus the contributions
-// worth linking directly. This one table feeds the Upstream ledger, the proof drawer and the
+// worth linking directly. This one table feeds the Upstream ledger, the sheet's readout and the
 // no-JS hero list. Repos missing here still count in the totals but are never listed. A label
 // names the repo, not a status: one label serves every status row the repo gets, and the chip
 // carries the status.

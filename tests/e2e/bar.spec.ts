@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// The sticky bar: one row from 720 px up; at 390 the lens switcher takes its own second row.
+// The sticky bar: one row from 720 px up.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     try {
@@ -27,34 +27,22 @@ for (const width of [720, 800, 900, 1023, 1024, 1280]) {
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
     const items = await barItems(page)
-    // Mark, lenses, search, sources and theme everywhere; the shortcuts switch too from 1024 px.
-    expect(items.length).toBe(width < 1024 ? 5 : 6)
+    // Mark, search, sources and theme.
+    expect(items.length).toBe(4)
     const firstBottom = Math.min(...items.map((item) => item.bottom))
     for (const item of items) expect(item.top, item.name).toBeLessThan(firstBottom)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
   })
 }
 
-// Where the bar drops the shortcuts switch for room, the footer shows it, so one of each stays visible.
+// The footer's settings stay hidden where the bar has the theme control, so exactly one shows.
 for (const width of [720, 900, 1024]) {
-  test(`one theme control and one shortcuts switch are visible at ${width} px`, async ({ page }) => {
+  test(`one theme control is visible at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/')
     await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
     const visible = (selector: string) =>
       page.locator(selector).evaluateAll((items) => items.filter((item) => item.checkVisibility()).map((item) => item.textContent?.trim()))
     expect(await visible('[data-theme-control]')).toEqual(['Theme: system'])
-    expect(await visible('[data-shortcuts-control]')).toEqual(['Keyboard shortcuts'])
   })
 }
-
-test('at 390 px the lens switcher takes its own second row', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/')
-  await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
-  const items = await barItems(page)
-  const lenses = items.find((item) => item.name === 'lenses')!
-  const others = items.filter((item) => item.name !== 'lenses')
-  for (const item of others) expect(lenses.top, item.name).toBeGreaterThanOrEqual(item.bottom)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
-})

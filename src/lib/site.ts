@@ -9,7 +9,7 @@ export const github = loadGithubData({
   livePath: join(dataDir, 'github.json'),
   snapshotPath: join(dataDir, 'github.snapshot.json'),
 })
-// The one upstream list: the ledger section, the drawer and the no-JS hero list all read it.
+// The one upstream list: the ledger section, the readout and the no-JS hero list all read it.
 export const upstream: UpstreamRow[] = upstreamRows(github.ledger)
 export const upstreamIn = (id: DomainId): UpstreamRow[] => upstream.filter((row) => row.domainId === id)
 

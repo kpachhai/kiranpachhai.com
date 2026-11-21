@@ -154,6 +154,23 @@ describe('budget gate', () => {
     expect(runCli(dist).status).toBe(1)
   })
 
+  it('fails when the home HTML is over 40 KB gzip -9', () => {
+    const big = incompressible(52_000)
+    const dist = makeDist({ 'index.html': page(`<p>${big}</p>`) })
+    const measured = measureDist(dist)
+    expect(measured.html).toBeGreaterThan(LIMITS.html)
+    expect(LIMITS.html).toBe(40_000)
+    expect(breaches(measured).join('\n')).toMatch(/Home HTML/)
+    expect(runCli(dist).status).toBe(1)
+  })
+
+  // A dist without a home page would otherwise measure an empty string and pass the HTML limit.
+  it('throws when dist has no index.html', () => {
+    const dist = makeDist({ 'work/index.html': page('<p>case</p>') })
+    expect(() => measureDist(dist)).toThrow(/index\.html/)
+    expect(runCli(dist).status).not.toBe(0)
+  })
+
   it('counts canvas elements in built HTML', () => {
     const dist = makeDist({ 'index.html': page('<canvas></canvas><canvas></canvas>') })
     expect(measureDist(dist).canvas).toBe(2)

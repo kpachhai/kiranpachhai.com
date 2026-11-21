@@ -1,7 +1,7 @@
 ---
-// Exactly four exits: no email, no location, no form. The settings (theme and keyboard shortcuts) sit
-// here on every page that has no island bar; the home page's bar carries the same two controls, so
-// they are not repeated. They need JavaScript, so they are hidden without it.
+// Exactly four exits: no email, no location, no form. The theme control sits
+// here on every page that has no island bar; the home page's bar carries the same control, so it
+// is not repeated. It needs JavaScript, so it is hidden without it.
 // The gates line comes from src/data/gates.json, written by `npm run gates` only after every gate
 // passes; before the first full pass the file is absent and the line is left out.
 import { parseGates } from '../../lib/gates'
@@ -22,7 +22,6 @@ const gates = recorded.length > 0 ? parseGates(recorded[0]) : null
     {gates && <p class="gates">Passed {gates.passed} of {gates.total} gates on <time datetime={gates.date}>{gates.date}</time></p>}
     <div class="settings" role="group" aria-label="Settings">
       <button type="button" data-theme-control>Theme: system</button>
-      <button type="button" data-shortcuts-control aria-pressed="true">Keyboard shortcuts</button>
     </div>
   </div>
 </footer>
@@ -39,15 +38,5 @@ const gates = recorded.length > 0 ? parseGates(recorded[0]) : null
   .settings { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
   .settings button { border: 1px solid var(--control-line); background: transparent; color: inherit; padding: 7px 10px; font: inherit; cursor: pointer; }
   .settings button:hover { border-color: var(--ink); }
-  .settings [aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
   :global(html:not(.js)) .settings, :global(html:has(header.bar)) .settings { display: none; }
-  /* Phones have no number keys; the switch shows where the keys exist, as in the home bar. */
-  @media (max-width: 719px) {
-    [data-shortcuts-control] { display: none; }
-  }
-  /* From 720 to 1023 px the home bar has no room for the shortcuts switch, so the footer shows it. */
-  @media (min-width: 720px) and (max-width: 1023px) {
-    :global(html.js:has(header.bar)) .settings { display: flex; }
-    :global(html:has(header.bar)) [data-theme-control] { display: none; }
-  }
 </style>

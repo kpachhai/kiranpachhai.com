@@ -19,7 +19,7 @@ const ledgers: [string, Upstream[]][] = [
   ...(existsSync(LIVE) ? [['live', loadGithubData({ livePath: LIVE }).ledger] as [string, Upstream[]]] : []),
 ]
 
-const drawerFor = (ledger: Upstream[]) => buildIslandData(model, (source) => sourceLabel(source), upstreamRows(ledger)).domains
+const readoutFor = (ledger: Upstream[]) => buildIslandData(model, (source) => sourceLabel(source), upstreamRows(ledger)).domains
 
 // Every contribution the drawer listed before the lists were joined; each keeps its link target.
 const KEPT_HREFS = [
@@ -48,8 +48,8 @@ const KEPT_HREFS = [
 
 describe('one upstream list', () => {
   for (const [name, ledger] of ledgers) {
-    it(`the drawer names only repos, labels and statuses the ${name} ledger has, per area`, () => {
-      for (const domain of drawerFor(ledger)) {
+    it(`the readout names only repos, labels and statuses the ${name} ledger has, per area`, () => {
+      for (const domain of readoutFor(ledger)) {
         const entries = ledger.filter((entry) => entry.domainId === domain.id)
         const ledgerHrefs = [...new Set(entries.map((entry) => entry.href))]
         expect(domain.upstream.map((item) => item.href), domain.id).toEqual(ledgerHrefs)
@@ -61,8 +61,8 @@ describe('one upstream list', () => {
       }
     })
 
-    it(`keeps every contribution the drawer listed, with its real link target (${name})`, () => {
-      const shown = drawerFor(ledger).flatMap((domain) => domain.upstream.flatMap((item) => [item.href, ...item.links.map((link) => link.href)]))
+    it(`keeps every contribution the readout lists, with its real link target (${name})`, () => {
+      const shown = readoutFor(ledger).flatMap((domain) => domain.upstream.flatMap((item) => [item.href, ...item.links.map((link) => link.href)]))
       expect(KEPT_HREFS.filter((href) => !shown.includes(href))).toEqual([])
     })
   }
@@ -83,7 +83,7 @@ describe('one upstream list', () => {
   it('takes a status from the refreshed data, so a merge shows as merged everywhere', () => {
     const site = 'https://github.com/LFDT-CLPR/clpr-website'
     const ledger: Upstream[] = [{ label: UPSTREAM_MAP['LFDT-CLPR/clpr-website']!.label, href: site, status: 'merged', domainId: 'explainers' }]
-    const explainers = drawerFor(ledger).find((domain) => domain.id === 'explainers')!
+    const explainers = readoutFor(ledger).find((domain) => domain.id === 'explainers')!
     expect(explainers.upstream).toHaveLength(1)
     expect(explainers.upstream[0]!.statuses).toEqual([{ status: 'merged', label: 'Merged' }])
     expect(explainers.upstream[0]!.links.map((link) => link.href)).toEqual([`${site}/pull/7`])
