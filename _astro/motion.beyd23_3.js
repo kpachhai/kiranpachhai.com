@@ -1,0 +1,1 @@
+var e=`cubic-bezier(0.22, 1, 0.36, 1)`,t=null,n=()=>t??=window.matchMedia(`(prefers-reduced-motion: reduce)`);function r(){return n().matches}function i(e){let t=t=>e(t.matches);return n().addEventListener(`change`,t),()=>n().removeEventListener(`change`,t)}export{i as n,r,e as t};

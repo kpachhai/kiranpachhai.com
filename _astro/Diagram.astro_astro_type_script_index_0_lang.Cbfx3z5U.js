@@ -1,1 +1,0 @@
-import{n as e}from"./motion.Cp-Znnw3.js";if(!e()&&`IntersectionObserver`in window)for(let e of document.querySelectorAll(`figure.dg`)){e.classList.add(`armed`);let t=new IntersectionObserver(n=>{n.some(e=>e.isIntersecting)&&(e.classList.add(`in`),t.disconnect())},{threshold:.3});t.observe(e)}
