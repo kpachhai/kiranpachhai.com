@@ -41,7 +41,7 @@
     "@types/node": "22.20.5",
     "linkinator": "8.1.0",
     "satori": "0.63.2",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vitest": "5.1.1",
     "yaml": "2.9.1"
   },
