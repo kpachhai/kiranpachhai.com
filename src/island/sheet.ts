@@ -8,7 +8,7 @@ import type { IslandData } from './data'
 import { el } from './dom'
 import { prefersReducedMotion } from './motion'
 import { openPalette } from './palette'
-import { initReadout, onReadoutChange, showArea, showMaterial, type Shown } from './readout'
+import { MATERIAL_OPEN, initReadout, onReadoutChange, showArea, showMaterial, type Shown } from './readout'
 
 const COMMAND = 'kp open'
 const TYPE_MS = 35
@@ -46,15 +46,15 @@ function bindMaterials(sheet: HTMLElement): HTMLButtonElement[] {
     const row = item.querySelector('.mat-row')
     const materialId = item.dataset.material
     if (!row || !materialId) throw new Error('sheet: a materials row is missing its material')
-    const button = el('button', { type: 'button', class: 'mat-row', 'data-material-open': materialId, 'aria-controls': 'readout' }, [
+    const button = el('button', { type: 'button', class: 'mat-row', [MATERIAL_OPEN]: materialId, 'aria-controls': 'readout' }, [
       ...row.childNodes,
     ])
     row.replaceWith(button)
     buttons.push(button)
   }
   sheet.addEventListener('click', (event) => {
-    const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-material-open]') : null
-    if (button?.dataset.materialOpen) showMaterial(button.dataset.materialOpen)
+    const materialId = event.target instanceof Element ? event.target.closest(`[${MATERIAL_OPEN}]`)?.getAttribute(MATERIAL_OPEN) : null
+    if (materialId) showMaterial(materialId)
   })
   return buttons
 }
@@ -67,7 +67,7 @@ function markShown(sheet: HTMLElement, materialButtons: HTMLButtonElement[], sho
     else summit.removeAttribute('aria-current')
   }
   for (const button of materialButtons) {
-    if (button.dataset.materialOpen === materialId) button.setAttribute('aria-current', 'true')
+    if (button.getAttribute(MATERIAL_OPEN) === materialId) button.setAttribute('aria-current', 'true')
     else button.removeAttribute('aria-current')
   }
 }
@@ -91,16 +91,18 @@ function typeCommand(target: HTMLElement): (shown: Shown | null) => void {
   }
 }
 
-// Hovering or focusing a methods row lights its trail in both drawings, and its tag.
+// Hovering or focusing a methods row lights its trail in both drawings and its tag, or, for a method
+// one area uses, its spot ring on that area's summit. Each row's description says which.
 function bindMethods(sheet: HTMLElement): void {
   const light = (methodId: string | null) => {
-    for (const item of sheet.querySelectorAll<Element>('tr[data-method], path.trail[data-method], .tag[data-method]')) {
-      item.classList.toggle('on', item.getAttribute('data-method') === methodId)
+    for (const item of sheet.querySelectorAll<Element>('tr[data-method], path.trail[data-method], .tag[data-method], .summit i.spot[data-letter]')) {
+      item.classList.toggle('on', (item.getAttribute('data-method') ?? item.getAttribute('data-letter')) === methodId)
     }
   }
   const focusedMethod = () => (document.activeElement instanceof HTMLElement && document.activeElement.matches('#sheet tr[data-method]') ? (document.activeElement.dataset.method ?? null) : null)
   for (const row of sheet.querySelectorAll<HTMLElement>('tr[data-method]')) {
     row.tabIndex = 0
+    if (row.dataset.lights) row.setAttribute('aria-describedby', requireIn(sheet, `#meth-hint-${row.dataset.lights}`).id)
     row.addEventListener('mouseenter', () => light(row.dataset.method ?? null))
     row.addEventListener('mouseleave', () => light(focusedMethod()))
     row.addEventListener('focus', () => light(row.dataset.method ?? null))
@@ -109,18 +111,42 @@ function bindMethods(sheet: HTMLElement): void {
 }
 
 // Old lens links scroll to the sheet and drop the hash, keeping any query string; #area-<id> shows
-// that area in the readout.
-function landOnHash(sheet: HTMLElement, data: IslandData): void {
+// that area in the readout and moves focus to its heading, so Esc works at once.
+function landOnHash(sheet: HTMLElement, data: IslandData): boolean {
   const hash = window.location.hash
   if (OLD_LENSES.has(hash)) {
     sheet.scrollIntoView({ block: 'start' })
     window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
-    return
+    return false
   }
   const domainId = AREA_HASH.exec(hash)?.[1]
-  if (!domainId || !data.domains.some((domain) => domain.id === domainId)) return
-  showArea(domainId as DomainId)
-  requireIn<HTMLElement>(sheet, '#readout').scrollIntoView({ block: 'nearest' })
+  if (!domainId || !data.domains.some((domain) => domain.id === domainId)) return false
+  showArea(domainId as DomainId, { focus: true })
+  return true
+}
+
+// Chromium and WebKit drop focus when they scroll the page to its fragment and the target (the
+// static list's item, hidden with JavaScript) cannot take it, which on the page's first load they do
+// after the island has run. So focus moves to the heading again two frames after load, without
+// scrolling: unless the reader has acted (wheel, touch, pointer or key) since the island started,
+// or has put focus somewhere. Scroll itself does not count, since the landing scrolls.
+const READER_INPUT = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
+
+function refocusAfterLoad(sheet: HTMLElement): void {
+  let acted = false
+  const act = () => {
+    acted = true
+  }
+  for (const type of READER_INPUT) window.addEventListener(type, act, { capture: true, passive: true })
+  const settle = () =>
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        for (const type of READER_INPUT) window.removeEventListener(type, act, { capture: true })
+        if (!acted && document.activeElement === document.body) requireIn<HTMLElement>(sheet, '#readout-h').focus({ preventScroll: true })
+      }),
+    )
+  if (document.readyState === 'complete') settle()
+  else window.addEventListener('load', settle, { once: true })
 }
 
 export function initSheet(data: IslandData): void {
@@ -137,6 +163,6 @@ export function initSheet(data: IslandData): void {
     markShown(sheet, materialButtons, shown)
     type(shown)
   })
-  landOnHash(sheet, data)
+  if (landOnHash(sheet, data)) refocusAfterLoad(sheet)
   window.addEventListener('hashchange', () => landOnHash(sheet, data))
 }

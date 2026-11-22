@@ -1,6 +1,7 @@
 // Island entry: wires the bar, the palette and the sheet's controls onto the static page.
 // Without JavaScript none of this runs: each summit links to its area in the static list under the
 // sheet. With it, that list is hidden and the sheet's readout shows an area or a material instead.
+// An island that throws while it starts marks itself failed, which shows the list again.
 import { readIslandData } from './data'
 import { initIntro } from './intro'
 import { initJourney } from './journey'
@@ -45,4 +46,9 @@ function main(): void {
   initIntro()
 }
 
-main()
+try {
+  main()
+} catch (error) {
+  document.documentElement.dataset.island = 'failed'
+  throw error
+}

@@ -6,6 +6,7 @@
 // drawing by custom properties.
 import { model } from '../../model'
 import { buildIslandData } from '../../island/data'
+import { pad, proofCount } from '../../island/format'
 import { sourceLabel } from '../../lib/provenance'
 import { languages, proofById, upstream } from '../../lib/site'
 import { LAYOUTS, contourLines, methodsOfDomain, scheduleCells, sheetTrails, spots, type ContourLine, type SheetShape } from '../../lib/sheet'
@@ -17,9 +18,7 @@ for (const shape of SHAPES) {
   if (LAYOUTS[shape].summits.length !== model.domains.length) throw new Error(`Sheet: the ${shape} layout has no summit for every domain`)
 }
 
-const pad = (value: number) => String(value).padStart(2, '0')
 const numberOf = (domainId: string) => pad(model.domains.findIndex((domain) => domain.id === domainId) + 1)
-const proofCount = (count: number) => `${count} ${count === 1 ? 'proof' : 'proofs'}`
 
 // The materials schedule keeps the bill of materials' bands. The two middle bands use the toolkit's
 // set names (Journey), so a part sits in the same group in both.
@@ -79,13 +78,18 @@ const tags = drawings[0].trails.map(({ methodId }) => ({
 
 const methodRows = model.methods.map((method) => {
   const areas = model.domains.filter((domain) => methodsOfDomain(data, domain.id).includes(method.id)).map((domain) => numberOf(domain.id))
-  return { id: method.id, name: method.name, areas, spot: areas.length === 1, trail: areas.length >= 2 }
+  const spot = areas.length === 1
+  const trail = areas.length >= 2
+  return { id: method.id, name: method.name, areas, spot, trail, lights: spot ? 'spot' : trail ? 'trail' : undefined }
 })
 
 const cells = new Map(scheduleCells(data).map((cell) => [`${cell.domainId}/${cell.mode}`, cell.count]))
 const cellCount = (domainId: string, mode: string) => cells.get(`${domainId}/${mode}`) ?? 0
-// The drawings' own dimensions, so the CSS that places and scales them reads the geometry, not copies.
-const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width};--${shape}-h:${LAYOUTS[shape].height};--${shape}-core:${LAYOUTS[shape].core}`)
+// The drawings' own dimensions and label width, so the CSS that places, scales and sizes them reads
+// the geometry the trails are routed around, not copies.
+const drawingStyle = SHAPES.map(
+  (shape) => `--${shape}-w:${LAYOUTS[shape].width};--${shape}-h:${LAYOUTS[shape].height};--${shape}-core:${LAYOUTS[shape].core};--${shape}-label:${LAYOUTS[shape].label.width}`,
+)
   .concat(`--tall-core-w:${LAYOUTS.tall.coreWidth}`)
   .join(';')
 ---
@@ -176,9 +180,26 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
   </div>
 
   {/* The readout follows the command line: under it on a phone, and across the sheet under the
-      drawing row on a desktop, so opening an area never jumps past the materials schedule. */}
-  <section class="readout" id="readout" aria-labelledby="readout-h" hidden>
-    <h3 id="readout-h" class="sr-only">Readout</h3>
+      drawing row on a desktop, so opening an area never jumps past the materials schedule. Its
+      resting state, `kp map`, is rendered here as the island draws it, so it holds its room from
+      first paint and the materials schedule under it never moves when the island starts. Its
+      buttons do nothing until then, so the tree is inert; the island's own tree replaces it. */}
+  <section class="readout js-only" id="readout" aria-labelledby="readout-h">
+    <p class="ro-cmd"><span class="ps" aria-hidden="true">$</span>{' kp map'}</p>
+    <h3 id="readout-h" tabindex="-1">{`${model.domains.length} areas / ${model.proofs.length} proofs / select one`}</h3>
+    <ul class="ro-tree" inert>
+      {
+        summits.map((summit) => (
+          <li>
+            <button type="button" data-readout-area={summit.id}>
+              <span class="ro-no">{summit.number}</span>
+              <span class="ro-name">{summit.name}</span>
+              <span class="ro-count">{summit.count}</span>
+            </button>
+          </li>
+        ))
+      }
+    </ul>
   </section>
 
   <div class="side">
@@ -191,7 +212,7 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
         <tbody>
           {
             methodRows.map((row) => (
-              <tr data-method={row.id}>
+              <tr data-method={row.id} data-lights={row.lights}>
                 <td class="rev">{row.id}</td>
                 <td class="mname">{row.name}</td>
                 <td>{(row.trail || row.spot) && <span class={row.spot ? 'swatch spot' : 'swatch'} aria-hidden="true" />}<span class="sr-only">{row.spot ? 'Spot' : row.trail ? 'Trail' : ''}</span></td>
@@ -201,6 +222,9 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
           }
         </tbody>
       </table>
+      {/* What focusing a row does, which the island names as each row's description. */}
+      <span id="meth-hint-trail" hidden>Highlights its trail on the map</span>
+      <span id="meth-hint-spot" hidden>Highlights its spot on the map</span>
     </div>
     <div class="blk">
       <h3>Schedule / areas by mode</h3>
@@ -322,7 +346,7 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
      summit point, where the trails end. Sized in container units so it keeps its share of the
      drawing at every width. */
   .summit { position: absolute; left: calc(50cqw + (var(--x-wide) - var(--wide-w) / 2) * var(--s)); top: calc(50cqh + (var(--y-wide) - var(--wide-h) / 2) * var(--s));
-    width: calc(240 * var(--s)); transform: translate(-50%, -6px);
+    width: calc(var(--wide-label) * var(--s)); transform: translate(-50%, -6px);
     display: grid; justify-items: center; gap: 3px; text-align: center; color: var(--sh-line); text-decoration: none; }
   .summit .peak { width: 0; height: 0; border-inline: 7px solid transparent; border-bottom: 12px solid var(--sh-line); }
   /* Label text grows with the reader's text size, at half rate on top of a fixed part, so a label at
@@ -344,6 +368,8 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
   /* A spot: a method only this area uses, ringed in the trail colour. The ring is taller than the
      line, so its block margin keeps it clear of the name above as well as the letters beside it. */
   .summit .letters i.spot { display: inline-grid; place-items: center; min-width: 1.7em; height: 1.7em; margin-block: 2px; border: 1.5px solid var(--sh-trail); border-radius: 50%; color: var(--sh-trail); }
+  /* A lit spot, from its row in the methods table: filled, as a lit trail's tag is. */
+  .summit .letters i.spot.on { background: var(--sh-trail); color: var(--sh-ground); }
   .summit:hover .name, .summit:focus-visible .name, .summit[aria-current="true"] .name { color: var(--sh-select); }
   .summit:hover .peak, .summit:focus-visible .peak, .summit[aria-current="true"] .peak { border-bottom-color: var(--sh-select); }
   .summit[aria-current="true"] .no { border-color: var(--sh-select); color: var(--sh-select); }
@@ -429,9 +455,9 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
   /* The readout is built by the island, so its rules are global under .readout. */
   .readout { display: grid; gap: 6px; min-width: 0; padding: 14px 16px 18px; border-top: 1.5px solid var(--sh-line); font-family: var(--mono); font-size: 0.8125rem; color: var(--ink);
     scroll-margin: calc(var(--bar-h, 0px) + 12px) 0 12px; }
-  /* The island unhides it; without JavaScript it takes no room, and display: grid above would
-     otherwise override the hidden attribute. */
-  .readout[hidden] { display: none; }
+  /* Without JavaScript it takes no room (js-only); an island that failed to start leaves its buttons
+     dead, so it takes none then either, and the static list under the sheet shows instead. */
+  :global(html[data-island="failed"]) .readout { display: none; }
   .readout :global(.ro-cmd) { margin: 0; }
   .readout :global(.ps) { color: var(--accent); font-weight: 600; }
   .readout :global(#readout-h) { margin: 0; font-family: var(--mono); font-size: 0.9375rem; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; outline: none; }
@@ -481,8 +507,9 @@ const drawingStyle = SHAPES.map((shape) => `--${shape}-w:${LAYOUTS[shape].width}
     .sheet-drawing { container-type: inline-size; flex: none; min-height: 0; --s: calc(min(100cqi, 560px) / var(--tall-core-w)); height: calc(var(--tall-h) * var(--s)); }
     .sheet-drawing > svg[data-shape="wide"] { display: none; }
     .sheet-drawing > svg[data-shape="tall"] { display: block; left: calc(50cqw - var(--tall-w) * var(--s) / 2); top: 0; width: calc(var(--tall-w) * var(--s)); height: calc(var(--tall-h) * var(--s)); }
-    /* 150 units wide: narrower than the gap between the zigzag's columns, so labels never meet across it. */
-    .summit { left: calc(50cqw + (var(--x-tall) - var(--tall-w) / 2) * var(--s)); top: calc(var(--y-tall) * var(--s)); width: calc(150 * var(--s)); }
+    /* The geometry's label width (LAYOUTS.tall.label in src/lib/sheet.ts): narrower than the gap
+       between the zigzag's columns, so labels never meet across it. */
+    .summit { left: calc(50cqw + (var(--x-tall) - var(--tall-w) / 2) * var(--s)); top: calc(var(--y-tall) * var(--s)); width: calc(var(--tall-label) * var(--s)); }
     /* The name grows by 3.1 % of the core's drawn width: 11.16 of its 360 units. */
     .summit .name { font-size: calc(0.5rem + 11.16 * var(--s)); }
     .tag { left: calc(50cqw + (var(--x-tall) - var(--tall-w) / 2) * var(--s)); top: calc(var(--y-tall) * var(--s)); font-size: max(calc(0.25rem + 6px), 11 * var(--s)); }

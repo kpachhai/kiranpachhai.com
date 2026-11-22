@@ -7,6 +7,7 @@ import type { DomainId } from '../model/schema'
 import type { SourceLabel } from '../lib/provenance'
 import type { IslandData, IslandProof } from './data'
 import { el } from './dom'
+import { pad, proofCount } from './format'
 import { prefersReducedMotion } from './motion'
 
 export type Shown = { domainId: DomainId } | { materialId: string }
@@ -17,10 +18,12 @@ let data: IslandData
 let readout: HTMLElement
 let live: HTMLElement
 let shown: Shown | null = null
+let announcing = 0
 const subscribers = new Set<(shown: Shown | null) => void>()
 
-const pad = (value: number) => String(value).padStart(2, '0')
-const proofCount = (count: number) => `${count} ${count === 1 ? 'proof' : 'proofs'}`
+// The attribute the sheet gives each materials row's button, naming its material.
+export const MATERIAL_OPEN = 'data-material-open'
+
 const proofsOf = (domainId: DomainId) => data.proofs.filter((proof) => proof.domainId === domainId)
 
 export function onReadoutChange(cb: (shown: Shown | null) => void): () => void {
@@ -28,7 +31,9 @@ export function onReadoutChange(cb: (shown: Shown | null) => void): () => void {
   return () => subscribers.delete(cb)
 }
 
+// Whatever is shown next replaces a step's pending announcement, which would otherwise land late.
 function show(next: Shown | null, parts: HTMLElement[]): void {
+  window.cancelAnimationFrame(announcing)
   readout.replaceChildren(...parts)
   shown = next
   for (const cb of subscribers) cb(shown)
@@ -169,11 +174,23 @@ function focusHeading(): void {
   readout.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
 }
 
-// An area shown without moving focus (a step, a link to #area-<id>) is announced instead.
+// A live region written the text it already holds may not be read again, so it is cleared first and
+// the message lands two frames later, once the empty region has been painted.
+function announce(message: string): void {
+  window.cancelAnimationFrame(announcing)
+  live.textContent = ''
+  announcing = window.requestAnimationFrame(() => {
+    announcing = window.requestAnimationFrame(() => {
+      live.textContent = message
+    })
+  })
+}
+
+// An area shown without moving focus (a step) is announced instead.
 export function showArea(domainId: DomainId, opts: { focus?: boolean } = {}): void {
   show({ domainId }, areaParts(domainId))
   if (opts.focus) focusHeading()
-  else live.textContent = `Showing ${data.domains.find((domain) => domain.id === domainId)?.name ?? domainId}`
+  else announce(`Showing ${data.domains.find((domain) => domain.id === domainId)?.name ?? domainId}`)
 }
 
 export function showMaterial(materialId: string): void {
@@ -194,7 +211,7 @@ function step(direction: 'prev' | 'next'): void {
 // The summit or materials row for what was shown, remembered by id: WebKit does not focus a
 // clicked link, so the element that had focus cannot be trusted to be the opener.
 function originOf(target: Shown): HTMLElement | null {
-  const selector = 'domainId' in target ? `#sheet a.summit[data-summit="${target.domainId}"]` : `#sheet [data-material-open="${target.materialId}"]`
+  const selector = 'domainId' in target ? `#sheet a.summit[data-summit="${target.domainId}"]` : `#sheet [${MATERIAL_OPEN}="${target.materialId}"]`
   return document.querySelector<HTMLElement>(selector)
 }
 
@@ -235,5 +252,4 @@ export function initReadout(islandData: IslandData): void {
   readout.addEventListener('click', onClick)
   document.addEventListener('keydown', (event) => onEscape(sheet, event))
   showTree()
-  readout.hidden = false
 }

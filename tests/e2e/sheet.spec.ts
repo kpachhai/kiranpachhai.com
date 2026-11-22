@@ -38,6 +38,32 @@ async function ready(page: Page) {
   await page.evaluate(() => document.fonts.ready)
 }
 
+// Holds the page's load event open: the footer's module script runs after the island's, so delaying
+// it keeps the document from completing while the island is already running.
+const holdLoad = (page: Page, ms: number) =>
+  page.route('**/_astro/Footer.astro*.js', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, ms))
+    await route.continue()
+  })
+
+// Resolves once the scroll position has held for ten frames in a row, so a smooth scroll the page
+// started has either run out or never began.
+const scrollSettled = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let last = window.scrollY
+        let still = 0
+        const tick = () => {
+          still = window.scrollY === last ? still + 1 : 0
+          last = window.scrollY
+          if (still >= 10) resolve()
+          else requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      }),
+  )
+
 const visibleDrawings = (page: Page) =>
   page.locator('.sheet-drawing svg[data-shape]').evaluateAll((svgs) => svgs.filter((svg) => svg.checkVisibility()).map((svg) => svg.getAttribute('data-shape')))
 
@@ -334,7 +360,7 @@ test.describe('sheet content', () => {
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true)
     const before = await page.evaluate(() => window.scrollY)
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(300)
+    await scrollSettled(page)
     expect(await page.evaluate(() => window.scrollY)).toBe(before)
     await expect(page.locator('#readout-h')).toHaveText(domain.name)
   })
@@ -361,6 +387,32 @@ test.describe('sheet content', () => {
     expect(widths).toEqual(['2.6px'])
   })
 
+  // A row takes focus, so it says what focusing it does: a trail row lights its trail, and a spot
+  // row (a method one area uses) lights its spot ring on that area's summit.
+  test('each methods row describes what focusing it lights, and a spot row lights its spot ring', async ({ page }) => {
+    await ready(page)
+    for (const method of model.methods) {
+      const expected = spotMethods.includes(method.id) ? 'Highlights its spot on the map' : trailMethods.includes(method.id) ? 'Highlights its trail on the map' : ''
+      await expect(page.locator(`#sheet tr[data-method="${method.id}"]`), method.id).toHaveAccessibleDescription(expected)
+    }
+    expect(spotMethods.length).toBeGreaterThan(0)
+    const litRings = () => page.locator('#sheet .summit .spot.on').evaluateAll((rings) => rings.map((ring) => ring.getAttribute('data-letter')))
+    for (const methodId of spotMethods) {
+      const [domainId] = areasUsing(methodId)
+      const ring = page.locator(`#sheet a.summit[data-summit="${domainId}"] .spot[data-letter="${methodId}"]`)
+      const settled = await ring.evaluate((element) => getComputedStyle(element).backgroundColor)
+      await page.locator(`#sheet tr[data-method="${methodId}"]`).focus()
+      expect(await litRings(), `focus ${methodId}`).toEqual([methodId])
+      expect(await ring.evaluate((element) => getComputedStyle(element).backgroundColor), methodId).not.toBe(settled)
+      await page.locator(`#sheet tr[data-method="${methodId}"]`).blur()
+      expect(await litRings(), `blur ${methodId}`).toEqual([])
+      await page.locator(`#sheet tr[data-method="${methodId}"]`).hover()
+      expect(await litRings(), `hover ${methodId}`).toEqual([methodId])
+      await page.mouse.move(0, 0)
+      expect(await litRings(), `leave ${methodId}`).toEqual([])
+    }
+  })
+
   test('the drawer is gone', async ({ page }) => {
     await ready(page)
     await expect(page.locator('#drawer')).toHaveCount(0)
@@ -378,6 +430,56 @@ test.describe('sheet content', () => {
     await page.locator('#readout [data-step="next"]').click()
     await expect(live).toHaveText(`Showing ${model.domains[1].name}`)
   })
+
+  // A live region that is written the message it already holds may not be read again, so each
+  // message lands in a region cleared first. Opening A from its summit focuses the heading and writes
+  // nothing; the three steps after it write three announcements, the last the same as the first.
+  test('every step is a fresh announcement, written into a cleared live region', async ({ page }) => {
+    await ready(page)
+    await page.evaluate(() => {
+      const region = document.getElementById('island-live')!
+      const writes: string[] = []
+      ;(window as unknown as { liveWrites: string[] }).liveWrites = writes
+      new MutationObserver(() => writes.push(region.textContent ?? '')).observe(region, { subtree: true, childList: true, characterData: true })
+    })
+    const [a, b] = model.domains
+    await page.locator(`#sheet a.summit[data-summit="${a.id}"]`).click()
+    await expect(page.locator('#readout-h')).toBeFocused()
+    for (const [direction, domain] of [['next', b], ['prev', a], ['next', b]] as const) {
+      await page.locator(`#readout [data-step="${direction}"]`).click()
+      await expect(page.locator('#island-live')).toHaveText(`Showing ${domain.name}`)
+    }
+    const writes = await page.evaluate(() => (window as unknown as { liveWrites: string[] }).liveWrites)
+    // The region starts empty, so the first message needs no clearing.
+    expect(writes).toEqual([`Showing ${b.name}`, '', `Showing ${a.name}`, '', `Showing ${b.name}`])
+  })
+
+  // A step's announcement lands two frames later. Opening an area from its summit, or going back
+  // to the map, within those frames replaces what the step showed, so the step is not announced.
+  for (const after of ['a summit opens an area', 'Back to the map']) {
+    test(`a step followed at once by ${after} announces nothing late`, async ({ page }) => {
+      await ready(page)
+      const [a, , c] = model.domains
+      await page.locator(`#sheet a.summit[data-summit="${a.id}"]`).click()
+      await expect(page.locator('#readout-h')).toBeFocused()
+      const writes = await page.evaluate(
+        ([summitId, back]) =>
+          new Promise<string[]>((resolve) => {
+            const region = document.getElementById('island-live')!
+            const seen: string[] = []
+            new MutationObserver(() => seen.push(region.textContent ?? '')).observe(region, { subtree: true, childList: true, characterData: true })
+            document.querySelector<HTMLElement>('#readout [data-step="next"]')!.click()
+            if (back) document.querySelector<HTMLElement>('#readout [data-readout-back]')!.click()
+            else document.querySelector<HTMLElement>(`#sheet a.summit[data-summit="${summitId}"]`)!.click()
+            let frames = 0
+            const tick = () => (++frames >= 6 ? resolve(seen) : requestAnimationFrame(tick))
+            requestAnimationFrame(tick)
+          }),
+        [c.id, after === 'Back to the map'] as const,
+      )
+      expect(writes.filter((text) => text !== '')).toEqual([])
+    })
+  }
 
   test('the title block totals match the model', async ({ page }) => {
     await ready(page)
@@ -415,6 +517,22 @@ test.describe('sheet content', () => {
     await page.keyboard.press('Enter')
     await expect(page.locator('#palette')).toBeHidden()
     await expect(page.locator('#readout-h')).toHaveText(domain.name)
+  })
+
+  // A material's readout prints kp open <material id> too, so search finds it by id or by name.
+  test('typing kp open and a material id or name in search shows that material in the readout', async ({ page }) => {
+    await ready(page)
+    const material = model.materials.find((item) => item.id === 'metamask-snaps')!
+    for (const term of [material.id, material.name]) {
+      await page.locator('#sheet-cmd').click()
+      await page.locator('#palette input').fill(`kp open ${term}`)
+      await page.keyboard.press('Enter')
+      await expect(page.locator('#palette'), term).toBeHidden()
+      await expect(page.locator('#readout-h'), term).toHaveText(material.name)
+      await expect(page.locator(`#sheet [data-material-open="${material.id}"]`), term).toHaveAttribute('aria-current', 'true')
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#readout .ro-cmd')).toHaveText('$ kp map')
+    }
   })
 
   // The caret draws the eye for a moment, then holds still.
@@ -483,6 +601,45 @@ test.describe('sheet hashes', () => {
     await expect(page.locator(`#sheet a.summit[data-summit="${domain.id}"]`)).toHaveAttribute('aria-current', 'true')
     await expect(page.locator('#readout')).toBeInViewport()
   })
+
+  // Esc counts only while focus is on the sheet, so an area opened from a hash takes focus too.
+  test('an #area- hash, on load or as a hash change, focuses the readout heading so Esc returns to the map', async ({ page }) => {
+    const [first, second] = [model.domains.find((item) => item.id === 'wallets')!, model.domains[0]]
+    await page.goto(`/#area-${first.id}`)
+    await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
+    for (const domain of [first, second]) {
+      if (domain === second) await page.evaluate((id) => (window.location.hash = `#area-${id}`), domain.id)
+      await expect(page.locator('#readout-h'), domain.id).toHaveText(domain.name)
+      await expect(page.locator('#readout-h'), domain.id).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(page.locator('#readout .ro-cmd'), domain.id).toHaveText('$ kp map')
+      await expect(page.locator(`#sheet a.summit[data-summit="${domain.id}"]`), domain.id).toBeFocused()
+    }
+  })
+
+  // The heading is focused again after load, since some engines drop focus then. A reader who has
+  // scrolled away by then is not pulled back: input of their own (here the wheel) cancels the
+  // refocus, and the refocus never scrolls (here the page moved without any input).
+  for (const how of ['the wheel', 'a script, with no input'] as const) {
+    test(`a reader who scrolls away from an #area- landing before load, by ${how}, stays where they scrolled`, async ({ page }) => {
+      await holdLoad(page, 2500)
+      await page.goto('/#area-wallets', { waitUntil: 'commit' })
+      await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
+      await scrollSettled(page)
+      expect(await page.evaluate(() => document.readyState)).not.toBe('complete')
+      if (how === 'the wheel') await page.mouse.wheel(0, 3000)
+      else await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await scrollSettled(page)
+      await expect(page.locator('#readout')).not.toBeInViewport()
+      const away = await page.evaluate(() => window.scrollY)
+      expect(await page.evaluate(() => document.readyState)).not.toBe('complete')
+      await page.waitForLoadState('load')
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))))
+      await scrollSettled(page)
+      expect(await page.evaluate(() => window.scrollY)).toBe(away)
+      if (how !== 'the wheel') await expect(page.locator('#readout-h')).toBeFocused()
+    })
+  }
 })
 
 // Each summit label, the dimension line and the datum box as boxes, plus any label that clips.
@@ -759,16 +916,31 @@ test.describe('sheet layout', () => {
     for (const svg of await page.locator('.sheet-drawing svg[data-shape]').all()) await expect(svg).toHaveAttribute('aria-hidden', 'true')
   })
 
-  // Uniform scaling: the shown drawing keeps its viewBox shape and every tag stays a circle.
+  // Uniform scaling, read from what is drawn rather than from the box CSS sizes: the drawing's own
+  // x and y scales (its screen matrix), and the scales the HTML summits are placed at across x and
+  // across y (pixels between two peaks over the viewBox units between their points). Any one of them
+  // differing from the others would stretch the drawing or slide the labels off their peaks. Every
+  // tag stays a circle.
   const shapeReport = (page: Page) =>
     page.evaluate(() => {
       const svg = [...document.querySelectorAll<SVGSVGElement>('.sheet-drawing svg[data-shape]')].find((item) => item.checkVisibility())!
-      const box = svg.viewBox.baseVal
-      const rect = svg.getBoundingClientRect()
+      const shape = svg.dataset.shape!
+      const matrix = svg.getScreenCTM()!
+      const peaks = [...document.querySelectorAll<HTMLElement>('#sheet a.summit')].map((summit) => {
+        const rect = summit.querySelector('.peak')!.getBoundingClientRect()
+        const unit = (axis: string) => Number(summit.style.getPropertyValue(`--${axis}-${shape}`))
+        return { x: unit('x'), y: unit('y'), px: rect.left + rect.width / 2, py: rect.top + rect.height / 2 }
+      })
+      // The two peaks furthest apart along each axis give that axis its steadiest reading.
+      const across = (axis: 'x' | 'y', screen: 'px' | 'py') => {
+        const sorted = [...peaks].sort((a, b) => a[axis] - b[axis])
+        const [low, high] = [sorted[0], sorted[sorted.length - 1]]
+        return (high[screen] - low[screen]) / (high[axis] - low[axis])
+      }
       const tags = [...document.querySelectorAll('#sheet .tag')].map((tag) => tag.getBoundingClientRect())
       return {
-        drawn: rect.width / rect.height,
-        viewBox: box.width / box.height,
+        scales: [matrix.a, matrix.d, across('x', 'px'), across('y', 'py')],
+        skew: Math.abs(matrix.b) + Math.abs(matrix.c),
         ovalTags: tags.filter((tag) => Math.abs(tag.width - tag.height) > 0.5).length,
         tags: tags.length,
       }
@@ -780,7 +952,9 @@ test.describe('sheet layout', () => {
       await ready(page)
       if (font) await page.evaluate((size) => (document.documentElement.style.fontSize = size), font)
       const report = await shapeReport(page)
-      expect(Math.abs(report.drawn / report.viewBox - 1)).toBeLessThan(0.01)
+      const [scale] = report.scales
+      for (const other of report.scales) expect(Math.abs(other / scale - 1), `scales ${report.scales.join(', ')}`).toBeLessThan(0.01)
+      expect(report.skew).toBe(0)
       expect(report.tags).toBeGreaterThan(0)
       expect(report.ovalTags).toBe(0)
     })
@@ -857,18 +1031,139 @@ test.describe('sheet without JavaScript', () => {
     await expect(page.locator('#readout')).toBeHidden()
     expect(await page.locator('#readout').evaluate((readout) => readout.getBoundingClientRect().height)).toBe(0)
   })
+
+  // Until the island is ready the static tree's buttons do nothing, so they take no focus and no
+  // clicks; the island's own tree replaces them and works.
+  test('before the island is ready the readout tree is inert, and after it the tree works', async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: true })
+    const page = await context.newPage()
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route('**/_astro/Stage.astro*.js', async (route) => {
+      await held
+      await route.continue()
+    })
+    await page.goto('/', { waitUntil: 'commit' })
+    const first = page.locator('#readout .ro-tree button').first()
+    await expect(first).toBeVisible()
+    expect(await page.locator('html').getAttribute('data-island')).toBeNull()
+    // Inert content takes no focus and no pointer events.
+    const before = await first.evaluate((button) => {
+      button.focus()
+      return { focused: document.activeElement === button, inert: button.closest('[inert]') !== null }
+    })
+    expect(before).toEqual({ focused: false, inert: true })
+    release()
+    await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
+    expect(await page.locator('#readout [inert]').count()).toBe(0)
+    const domain = model.domains[0]
+    await page.locator(`#readout .ro-tree button[data-readout-area="${domain.id}"]`).focus()
+    await expect(page.locator(`#readout .ro-tree button[data-readout-area="${domain.id}"]`)).toBeFocused()
+    await page.locator(`#readout .ro-tree button[data-readout-area="${domain.id}"]`).click()
+    await expect(page.locator('#readout-h')).toHaveText(domain.name)
+    await context.close()
+  })
+
+  // The page's HTML carries the readout's resting state, so it holds its room before the island runs
+  // and nothing under it moves. The island draws the same thing over it.
+  test('the resting readout in the HTML is the one the island draws', async ({ page, browser }) => {
+    const outline = (readout: Element) =>
+      [...readout.querySelectorAll('*')].map((element) => {
+        const area = element.getAttribute('data-readout-area')
+        const own = [...element.childNodes].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent).join('')
+        const text = own ? ` "${own}"` : ''
+        return `${element.tagName.toLowerCase()}${element.className ? `.${element.className}` : ''}${area ? `[${area}]` : ''}${text}`
+      })
+    await page.goto('/')
+    const staticOutline = await page.locator('#readout').evaluate(outline)
+    const context = await browser.newContext({ javaScriptEnabled: true })
+    const live = await context.newPage()
+    await live.goto('/')
+    await expect(live.locator('html')).toHaveAttribute('data-island', 'ready')
+    expect(await live.locator('#readout').evaluate(outline)).toEqual(staticOutline)
+    expect(staticOutline.length).toBeGreaterThan(model.domains.length * 4)
+    await context.close()
+  })
 })
 
-// The js class is set before first paint, but the island can still fail before it is ready. Until
-// then each summit must keep pointing at a list the reader can see.
+// The js class is set before first paint, but the island can still fail before it is ready. Then
+// each summit must keep pointing at a list the reader can see.
 test.describe('sheet when the island never gets ready', () => {
   test('the static list under the sheet stays visible', async ({ page }) => {
-    // The island is Stage.astro's script: it loads, so the js class stays, but it never runs.
+    // The island is Stage.astro's script: it loads, so the js class stays, but it never runs. By the
+    // load event it has not got ready, so Base.astro marks it failed.
     await page.route('**/_astro/Stage.astro*.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }))
     await page.goto('/')
     await expect(page.locator('html')).toHaveClass(/\bjs\b/)
     await page.waitForLoadState('load')
-    expect(await page.locator('html').getAttribute('data-island')).toBeNull()
+    expect(await page.locator('html').getAttribute('data-island')).toBe('failed')
+    for (const domain of model.domains) await expect(page.locator(`#area-${domain.id}`), domain.id).toBeVisible()
+  })
+
+  // The list collapses before first paint, so a reader who followed a deep link is never moved by it
+  // collapsing late. The island is held back here so the first frame comes before it is ready.
+  test('with JavaScript the static list is hidden from the first frame', async ({ page }) => {
+    await page.route('**/_astro/Stage.astro*.js', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      await route.continue()
+    })
+    await page.addInitScript(() => {
+      const look = () => {
+        const list = document.querySelector('#stage ol.index')
+        if (!list) {
+          requestAnimationFrame(look)
+          return
+        }
+        ;(window as unknown as { firstIndex: unknown }).firstIndex = { display: getComputedStyle(list).display, island: document.documentElement.dataset.island ?? null }
+      }
+      requestAnimationFrame(look)
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('data-island', 'ready')
+    expect(await page.evaluate(() => (window as unknown as { firstIndex: unknown }).firstIndex)).toEqual({ display: 'none', island: null })
+  })
+
+  // A throw while the island starts (here its data is not JSON) marks it failed and shows the list
+  // again, so every summit still points at an area the reader can see. The error still surfaces.
+  test('an island that throws before it is ready leaves the list visible and every summit pointing at it', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.route('**/', async (route) => {
+      const response = await route.fetch()
+      const html = await response.text()
+      const broken = html.replace(/(<script type="application\/json" id="island-data">)[\s\S]*?(<\/script>)/, '$1{not json$2')
+      expect(broken).not.toBe(html)
+      await route.fulfill({ response, body: broken })
+    })
+    // The island's own catch marks it failed while the page is still loading; the load-event
+    // fallback in Base.astro would only do so once the held footer script lets load fire.
+    await holdLoad(page, 1500)
+    await page.addInitScript(() => {
+      new MutationObserver((_, observer) => {
+        if (document.documentElement.getAttribute('data-island') !== 'failed') return
+        observer.disconnect()
+        ;(window as unknown as { failedAt: string }).failedAt = document.readyState
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-island'] })
+    })
+    await page.goto('/')
+    await expect(page.locator('html')).toHaveAttribute('data-island', 'failed')
+    expect(await page.evaluate(() => (window as unknown as { failedAt?: string }).failedAt)).not.toBe('complete')
+    await expect(page.locator('html')).toHaveClass(/\bjs\b/)
+    await expect(page.locator('#stage ol.index')).toBeVisible()
+    for (const domain of model.domains) {
+      const href = await page.locator(`#sheet a.summit[data-summit="${domain.id}"]`).getAttribute('href')
+      await expect(page.locator(href!), domain.id).toBeVisible()
+    }
+    expect(errors.length).toBeGreaterThan(0)
+  })
+
+  // A module that cannot load at all drops the js class (Base.astro), which shows the list.
+  test('an island module that fails to load leaves the list visible', async ({ page }) => {
+    await page.route('**/_astro/Stage.astro*.js', (route) => route.abort())
+    await page.goto('/')
+    await page.waitForLoadState('load')
+    await expect(page.locator('html')).not.toHaveClass(/\bjs\b/)
+    await expect(page.locator('#stage ol.index')).toBeVisible()
     for (const domain of model.domains) await expect(page.locator(`#area-${domain.id}`), domain.id).toBeVisible()
   })
 })

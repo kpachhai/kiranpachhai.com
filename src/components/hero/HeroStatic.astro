@@ -4,6 +4,7 @@
 import { cycleTitles, model } from '../../model'
 import { languages, proofsInDomain, upstreamIn } from '../../lib/site'
 import { STATUS_LABELS } from '../../model/labels'
+import { pad } from '../../island/format'
 import SourceTag from '../SourceTag.astro'
 import Sheet from '../sheet/Sheet.astro'
 
@@ -48,7 +49,7 @@ const SECTIONS: [string, string][] = [
           return (
             <li class="entry" id={`area-${domain.id}`} data-domain={domain.id}>
               <h3 class="entry-name">
-                <span class="num" aria-hidden="true">{String(position + 1).padStart(2, '0')}</span>
+                <span class="num" aria-hidden="true">{pad(position + 1)}</span>
                 {domain.name}
               </h3>
               <ul class="proofs">
@@ -118,9 +119,11 @@ const SECTIONS: [string, string][] = [
   .jump { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 0.75rem; padding-top: 12px; border-top: 1px solid var(--rule); }
   .stage { background: var(--paper); color: var(--s-ink); padding-block: 24px 32px; border-block: 1px solid var(--rule); }
   .index { list-style: none; margin: 24px 0 0; padding: 0; }
-  /* Once the island is ready the summits and the readout show the same content, so the list is not
-     repeated. Until then each summit still links to it. It sits below the sheet, off the first screen. */
-  :global(html[data-island="ready"]) #stage .index { display: none; }
+  /* With JavaScript the summits and the readout show the same content, so the list is not repeated.
+     It is hidden from first paint, so a reader who followed a deep link below it is never moved by it
+     collapsing late. An island that fails to start marks itself failed, and a module that fails to
+     load drops the js class (Base.astro): either way the list shows, and each summit links to it. */
+  :global(html.js:not([data-island="failed"])) #stage .index { display: none; }
   .entry { padding-block: 18px; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px 32px; }
   .entry:last-child { border-bottom: 0; }
   .entry-name { font-size: 2.75rem; line-height: 1.02; font-weight: 700; font-stretch: 82%; letter-spacing: 0.004em; overflow-wrap: break-word; }

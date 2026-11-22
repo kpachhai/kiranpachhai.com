@@ -1,10 +1,11 @@
 // The command palette: Ctrl or Cmd + K, or the Search button in the bar.
 // Plain text filters every entry; "kind: term" scopes to one kind; "mode: <mode>" lists the
-// proofs worked in that mode; "kp <domain|method>" runs a command, and "kp open <domain|method>" runs
-// the same one.
+// proofs worked in that mode; "kp <domain|method|material>" runs a command, and "kp open <term>" runs
+// the same one. A material's command matches its id or its name.
 import type { DomainId } from '../model/schema'
 import type { IslandData } from './data'
 import { el } from './dom'
+import { proofCount } from './format'
 import { popModal, pushModal } from './modal'
 import { prefersReducedMotion } from './motion'
 import { showArea, showMaterial } from './readout'
@@ -53,9 +54,24 @@ function scrollToMethod(id: string): void {
   target.focus({ preventScroll: true })
 }
 
+export interface Command {
+  label: string
+  hint: string
+  run(): void
+}
+
+// The `kp <id>` commands: one per area, method and material, each opening what it names. The three
+// share one space of labels, which a unit test keeps free of collisions.
+export function commandList(islandData: IslandData): Command[] {
+  return [
+    ...islandData.domains.map((domain) => ({ label: `kp ${domain.id}`, hint: domain.name, run: () => showArea(domain.id, { focus: true }) })),
+    ...islandData.methods.map((method) => ({ label: `kp ${method.id.toLowerCase()}`, hint: method.name, run: () => scrollToMethod(method.id) })),
+    ...islandData.materials.map((material) => ({ label: `kp ${material.id}`, hint: material.name, run: () => showMaterial(material.id) })),
+  ]
+}
+
 function buildEntries(): Entry[] {
   const domainName = (id: DomainId) => data.domains.find((domain) => domain.id === id)?.name ?? id
-  const proofCount = (count: number) => `${count} ${count === 1 ? 'proof' : 'proofs'}`
   const make = (kind: Kind, label: string, hint: string, run: () => void, extra = ''): Entry => ({
     kind,
     label,
@@ -83,10 +99,7 @@ function buildEntries(): Entry[] {
     keepOpen: true,
   }))
   const themes = THEMES.map((theme) => make('theme', `theme: ${theme}`, '', () => setTheme(theme)))
-  const commands = [
-    ...data.domains.map((domain) => make('command', `kp ${domain.id}`, domain.name, () => showArea(domain.id, { focus: true }))),
-    ...data.methods.map((method) => make('command', `kp ${method.id.toLowerCase()}`, method.name, () => scrollToMethod(method.id))),
-  ]
+  const commands = commandList(data).map((command) => make('command', command.label, command.hint, command.run))
   return [...domains, ...proofs, ...methods, ...materials, ...modes, ...themes, ...commands]
 }
 
@@ -99,7 +112,7 @@ function proofsInMode(term: string): Entry[] {
 }
 
 function matching(query: string): Entry[] {
-  // The command line and the readout print `kp open <id>`, so that runs as `kp <id>`.
+  // The command line and the readout print `kp open <id>` for an area or a material, so that runs as `kp <id>`.
   const q = query.trim().toLowerCase().replace(OPEN_ALIAS, 'kp')
   const scoped = SCOPED.exec(q)
   if (scoped?.[1] === 'mode') return proofsInMode(scoped[2])

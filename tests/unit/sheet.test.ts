@@ -1,7 +1,7 @@
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { model } from '../../src/model'
-import { buildIslandData } from '../../src/island/data'
+import { buildIslandData, type IslandData } from '../../src/island/data'
 import { sourceLabel } from '../../src/lib/provenance'
 import { upstream } from '../../src/lib/site'
 import { contours } from '../../src/lib/contours'
@@ -47,6 +47,16 @@ function distanceToPolyline(point: [number, number], points: [number, number][])
   return best
 }
 
+// The start point and the first quadratic segment of a trail path, read by command name: M x y,
+// then Q cx cy bx by. Returns [ax, ay, cx, cy, bx, by].
+function firstSegment(d: string): number[] {
+  const number = '(-?\\d+(?:\\.\\d+)?)'
+  const start = new RegExp(`^M${number} ${number}`).exec(d)
+  const curve = new RegExp(`Q${number} ${number} ${number} ${number}`).exec(d)
+  if (!start || !curve) throw new Error(`trail path has no M then Q: ${d.slice(0, 40)}`)
+  return [...start.slice(1, 3), ...curve.slice(1, 5)].map(Number)
+}
+
 // Label box (width, height) per shape, sized so 200 % text still fits.
 const LABEL_BOX = { wide: [240, 96], tall: [176, 112] } as const
 
@@ -69,8 +79,7 @@ describe('sheet layouts', () => {
     })
 
     it(`${layout.shape}: labels never overlap`, () => {
-      const [, labelHeight] = LABEL_BOX[layout.shape]
-      const [labelWidth] = LABEL_BOX[layout.shape]
+      const [labelWidth, labelHeight] = LABEL_BOX[layout.shape]
       layout.summits.forEach(([ax, ay], i) => {
         layout.summits.slice(i + 1).forEach(([bx, by]) => {
           const sharesX = Math.abs(ax - bx) < labelWidth
@@ -113,7 +122,12 @@ describe('contourLines', () => {
     it(`${layout.shape}: every summit has the same height`, () => {
       const { values, cols } = heightField(layout)
       const heights = layout.summits.map(([x, y]) => values[Math.round(y / CELL) * cols + Math.round(x / CELL)])
-      // sampled at the nearest grid node, so allow for up to half a cell of offset
+      // Sampled at the nearest grid node, at most half a cell (3 units) off the summit in x and in y.
+      // There the summit's own gaussian is at least exp(-18 * spread): 0.99917 on the wide sheet
+      // (sigma 104) and 0.99827 on the tall (sigma 72). A node's height is hill + ridge * (1 - hill),
+      // and the ridges sum to at most 0.275 each (22 wide, 13 tall), so two summits' sampled heights
+      // differ by at most (1 - hill) * that sum: 0.0050 wide, 0.0062 tall. 0.02 holds with room; the
+      // heights measured differ by 0.0002 and 0.0004.
       for (const height of heights) expect(Math.abs(height - heights[0])).toBeLessThan(0.02)
     })
 
@@ -178,7 +192,18 @@ describe('methods and trails', () => {
     }))
     .filter((entry) => entry.areas.length >= 2)
 
-  it('methodsOfDomain lists a domain\'s methods in rev order', () => {
+  // The proofs here name their methods out of rev order (D before A, then B), so only an output
+  // sorted by rev, not by first appearance, reads A, B, D.
+  it('methodsOfDomain lists a domain\'s methods in rev order, whatever order the proofs name them in', () => {
+    const [first, second] = data.proofs
+    const shuffled: IslandData = {
+      ...data,
+      proofs: [
+        { ...first, domainId: 'agents', methods: ['D', 'A'] },
+        { ...second, domainId: 'agents', methods: ['B', 'D'] },
+      ],
+    }
+    expect(methodsOfDomain(shuffled, 'agents')).toEqual(['A', 'B', 'D'])
     expect(methodsOfDomain(data, 'agents')).toEqual(['A', 'B', 'D'])
     expect(methodsOfDomain(data, 'protocol')).toEqual([])
   })
@@ -191,17 +216,17 @@ describe('methods and trails', () => {
       expect(shared.map((entry) => entry.id)).toEqual(['A', 'B', 'D'])
     })
 
-    it(`${layout.shape}: trails over the same pair of summits do not share a path`, () => {
-      const [a, b] = sheetTrails(data, layout)
-      expect(a.methodId).toBe('A')
-      expect(b.methodId).toBe('B')
-      expect(a.d).not.toBe(b.d)
+    it(`${layout.shape}: no two trails share a path`, () => {
+      const trails = sheetTrails(data, layout)
+      expect(trails.map((trail) => trail.methodId)).toEqual(['A', 'B', 'D'])
+      trails.forEach((trail, position) => {
+        for (const other of trails.slice(position + 1)) expect(trail.d, `${trail.methodId} and ${other.methodId}`).not.toBe(other.d)
+      })
     })
 
     it(`${layout.shape}: a trail's tag sits on the first segment's curve at t = 0.5`, () => {
       for (const trail of sheetTrails(data, layout)) {
-        const numbers = (trail.d.match(/-?\d+/g) ?? []).map(Number)
-        const [ax, ay, cx, cy, bx, by] = numbers
+        const [ax, ay, cx, cy, bx, by] = firstSegment(trail.d)
         expect(Math.abs(trail.tag[0] - (ax + 2 * cx + bx) / 4)).toBeLessThanOrEqual(1)
         expect(Math.abs(trail.tag[1] - (ay + 2 * cy + by) / 4)).toBeLessThanOrEqual(1)
       }

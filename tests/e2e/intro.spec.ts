@@ -65,8 +65,15 @@ test.describe('sheet intro', () => {
     test(`the settled sheet is painted before the intro starts, and layout shift during the intro stays under 0.02 at ${width} px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 })
       await page.addInitScript(() => {
-        const log = { firstFrame: null as null | { animations: number; contoursShown: number }, introAt: Infinity, shift: 0 }
+        const log = { firstFrame: null as null | { animations: number; contoursShown: number }, settledFrame: -1, introFrame: -1, introAt: Infinity, shift: 0 }
         ;(window as unknown as { introLog: typeof log }).introLog = log
+        // Counts animation frames. Registered first, so it ticks before any other callback in a frame.
+        let frame = 0
+        const count = () => {
+          frame++
+          requestAnimationFrame(count)
+        }
+        requestAnimationFrame(count)
         const look = () => {
           const sheet = document.getElementById('sheet')
           if (!sheet) {
@@ -76,14 +83,24 @@ test.describe('sheet intro', () => {
           const contours = [...sheet.querySelectorAll('path.contour')]
           // The sheet's own scripted animations: the hero's role cycle beside it may already be
           // stepping in this frame, and it is not the intro.
-          log.firstFrame = {
+          log.firstFrame ??= {
             animations: sheet.getAnimations({ subtree: true }).filter((animation) => !(animation instanceof CSSAnimation)).length,
             contoursShown: contours.filter((path) => getComputedStyle(path).strokeDasharray === 'none').length,
           }
+          // The intro is started as the island gets ready, so the first frame after that is the
+          // first that paints the settled sheet with the intro waiting on it. Its callbacks run
+          // before the intro's own, since this one was registered first.
+          if (document.documentElement.dataset.island !== 'ready') {
+            requestAnimationFrame(look)
+            return
+          }
+          log.settledFrame = frame
         }
         requestAnimationFrame(look)
         new MutationObserver(() => {
-          if (document.getElementById('sheet')?.dataset.intro === 'play') log.introAt = Math.min(log.introAt, performance.now())
+          if (document.getElementById('sheet')?.dataset.intro !== 'play' || log.introFrame >= 0) return
+          log.introAt = performance.now()
+          log.introFrame = frame
         }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-intro'] })
         new PerformanceObserver((list) => {
           for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) {
@@ -94,10 +111,14 @@ test.describe('sheet intro', () => {
       await loaded(page)
       await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
       await expect(page.locator('#sheet')).not.toHaveAttribute('data-intro', 'play', { timeout: 4000 })
-      const log = await page.evaluate(() => (window as unknown as { introLog: { firstFrame: unknown; introAt: number; shift: number } }).introLog)
+      const log = await page.evaluate(
+        () => (window as unknown as { introLog: { firstFrame: unknown; settledFrame: number; introFrame: number; introAt: number; shift: number } }).introLog,
+      )
       const contourCount = await page.locator('#sheet path.contour').count()
       expect(log.firstFrame).toEqual({ animations: 0, contoursShown: contourCount })
       expect(log.introAt).toBeLessThan(Infinity)
+      expect(log.settledFrame).toBeGreaterThan(0)
+      expect(log.introFrame - log.settledFrame, `settled in frame ${log.settledFrame}, intro in frame ${log.introFrame}`).toBeGreaterThanOrEqual(2)
       expect(log.shift).toBeLessThan(0.02)
     })
   }
@@ -176,6 +197,144 @@ test.describe('sheet intro', () => {
     await expect(page.locator('#palette')).toBeVisible()
     expectSettled(await sheetState(page), 'palette')
   })
+
+  // The intro waits two frames for the settled sheet to paint. A stop in that wait (here a hash
+  // change, dispatched as soon as the island is ready) skips the intro, and it still counts as seen.
+  test('a stop while the intro waits for first paint still marks it seen for the session', async ({ page }) => {
+    await page.addInitScript(() => {
+      const log = { played: false }
+      ;(window as unknown as { stopLog: typeof log }).stopLog = log
+      // The document element does not exist yet when this runs, so the document is observed.
+      new MutationObserver((_, observer) => {
+        if (document.documentElement.dataset.island !== 'ready') return
+        observer.disconnect()
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-island'] })
+      new MutationObserver(() => {
+        if (document.getElementById('sheet')?.dataset.intro === 'play') log.played = true
+      }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-intro'] })
+    })
+    await loaded(page)
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))))
+    expect(await page.evaluate(() => (window as unknown as { stopLog: { played: boolean } }).stopLog.played)).toBe(false)
+    expect(await page.evaluate((key) => sessionStorage.getItem(key), INTRO_KEY)).toBe('1')
+    expectSettled(await sheetState(page), 'stopped before it started')
+  })
+
+  // A draw that throws partway (here the 40th animation on the sheet) cancels the animations it
+  // already made, so none is left holding an element faded or half drawn. The error still surfaces.
+  test('an intro that fails partway through its setup leaves the settled sheet', async ({ page }) => {
+    await page.addInitScript(() => {
+      let made = 0
+      const animate = Element.prototype.animate
+      Element.prototype.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+        if (this.closest('#sheet') && ++made === 40) throw new Error('injected intro failure')
+        return animate.apply(this, args)
+      }
+    })
+    const failure = page.waitForEvent('pageerror')
+    await page.goto('/')
+    expect((await failure).message).toContain('injected intro failure')
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    expectSettled(await sheetState(page), 'after a failed setup')
+  })
+
+  // Under vector-effect: non-scaling-stroke every engine measures a dash in CSS pixels, not in the
+  // drawing's units, so a contour's dash must be its length on screen. The 880 px sheet is drawn
+  // below scale 1, where a dash in drawing units runs out early. Each sample pauses the contour's
+  // animation at a share of its duration and reads how much of the path its dash covers.
+  test('at 880 px a contour is still drawing at 90 % of its animation and is fully drawn only at its end', { tag: '@smoke' }, async ({ page }) => {
+    await page.setViewportSize({ width: 880, height: 900 })
+    await loaded(page)
+    await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
+    const report = await page.evaluate(() => {
+      const svg = [...document.querySelectorAll<SVGSVGElement>('#sheet svg[data-shape]')].find((item) => item.getClientRects().length > 0)!
+      const scale = svg.getScreenCTM()!.a
+      const paths = [...svg.querySelectorAll<SVGPathElement>('path.contour')]
+      const path = paths.reduce((longest, item) => (item.getTotalLength() > longest.getTotalLength() ? item : longest))
+      const animation = path.getAnimations().find((item) => !(item instanceof CSSAnimation))!
+      animation.pause()
+      const timing = animation.effect!.getTiming()
+      const onScreen = path.getTotalLength() * scale
+      const drawnAt = (share: number) => {
+        animation.currentTime = Number(timing.delay) + share * Number(timing.duration)
+        const style = getComputedStyle(path)
+        return (parseFloat(style.strokeDasharray) - parseFloat(style.strokeDashoffset)) / onScreen
+      }
+      const [first] = (animation.effect as KeyframeEffect).getKeyframes()
+      return { scale, mid: drawnAt(0.5), late: drawnAt(0.9), near: drawnAt(0.95), dash: parseFloat(String(first.strokeDasharray)), onScreen }
+    })
+    expect(report.scale).toBeLessThan(1)
+    expect(report.mid, 'mid-animation').toBeLessThan(1)
+    expect(report.late, 'at 90 %').toBeLessThan(1)
+    expect(report.near, 'at 95 %').toBeGreaterThan(0.99)
+    expect(report.near, 'at 95 %').toBeLessThan(1)
+    // The dash is the path's length on screen, so the last instant of the animation draws its end.
+    expect(Math.abs(report.dash - report.onScreen), `dash ${report.dash} for ${report.onScreen} px`).toBeLessThan(0.5)
+  })
+
+  // The probe behind the dash: a 200-unit line drawn at half and at double scale with a 100-unit dash
+  // paints 100 CSS px either way when its stroke does not scale.
+  test('under a non-scaling stroke a dash is measured in CSS pixels', { tag: '@smoke' }, async ({ page }) => {
+    for (const scale of [0.5, 2]) {
+      await page.setContent(
+        `<body style="margin:0;background:#fff"><svg width="${200 * scale}" height="${20 * scale}" viewBox="0 0 200 20" style="display:block">` +
+          '<path d="M0 10H200" stroke="#000" stroke-width="4" vector-effect="non-scaling-stroke" stroke-dasharray="100 1000" fill="none"/></svg>',
+      )
+      const shot = await page.screenshot({ clip: { x: 0, y: 0, width: 200 * scale, height: 20 * scale }, scale: 'css' })
+      const painted = await page.evaluate(async (png) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${png}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0)
+        const { data } = context.getImageData(0, 0, image.width, image.height)
+        let columns = 0
+        for (let x = 0; x < image.width; x++) {
+          let dark = false
+          for (let y = 0; y < image.height; y++) if (data[(y * image.width + x) * 4] < 128) dark = true
+          if (dark) columns++
+        }
+        return columns
+      }, shot.toString('base64'))
+      expect(Math.abs(painted - 100), `scale ${scale}: ${painted} px painted`).toBeLessThanOrEqual(2)
+    }
+  })
+
+  // Under 4x CPU throttling at 1280 x 1400, nothing on the home page moves once painted, with the
+  // intro playing or skipped. The sum of every shift is at least the page's CLS.
+  for (const intro of ['playing', 'skipped'] as const) {
+    test(`layout shift under 4x CPU throttling at 1280 x 1400 stays under 0.005 with the intro ${intro}`, async ({ page, browserName }) => {
+      test.skip(browserName !== 'chromium', 'CPU throttling is a Chromium DevTools protocol call')
+      await page.setViewportSize({ width: 1280, height: 1400 })
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
+      await page.addInitScript((skip) => {
+        if (skip) sessionStorage.setItem('kp-intro-seen', '1')
+        const log = { shift: 0, sources: [] as string[] }
+        ;(window as unknown as { shiftLog: typeof log }).shiftLog = log
+        type Source = { node?: Node }
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean; sources?: Source[] })[]) {
+            if (entry.hadRecentInput) continue
+            log.shift += entry.value
+            for (const source of entry.sources ?? []) {
+              const node = source.node instanceof Element ? source.node : source.node?.parentElement
+              log.sources.push(`${Math.round(entry.startTime)} ms ${node ? node.id || node.className : 'unknown'}`)
+            }
+          }
+        }).observe({ type: 'layout-shift', buffered: true })
+      }, intro === 'skipped')
+      await loaded(page)
+      // The intro runs about 2.5 s; the wait covers it, and a quiet page, either way.
+      await page.waitForTimeout(3500)
+      const log = await page.evaluate(() => (window as unknown as { shiftLog: { shift: number; sources: string[] } }).shiftLog)
+      expect(log.shift, log.sources.join('; ')).toBeLessThan(0.005)
+    })
+  }
 
   test('with reduced motion, document.getAnimations() is empty after load', { tag: '@smoke' }, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
