@@ -168,4 +168,14 @@ describe('workflows', () => {
     expect(config.updates.map((update) => update['package-ecosystem']).sort()).toEqual(['github-actions', 'npm'])
     for (const update of config.updates) expect(update.schedule.interval).toBe('weekly')
   })
+
+  it('dependabot keeps @types/node on the major of the supported Node line', () => {
+    type Update = { 'package-ecosystem': string; ignore?: { 'dependency-name': string; 'update-types'?: string[] }[] }
+    const config = parse(readFileSync('.github/dependabot.yml', 'utf8')) as { updates: Update[] }
+    const npm = config.updates.find((update) => update['package-ecosystem'] === 'npm')!
+    const rule = npm.ignore?.find((entry) => entry['dependency-name'] === '@types/node')
+    expect(rule?.['update-types']).toEqual(['version-update:semver-major'])
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { engines: { node: string }; devDependencies: Record<string, string> }
+    expect(pkg.devDependencies['@types/node'].split('.')[0]).toBe(pkg.engines.node.replace(/^>=/, '').split('.')[0])
+  })
 })
