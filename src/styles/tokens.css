@@ -4,7 +4,7 @@
   --plan-ground: #EEF2F4; --plan-ink: #13233A; --plan-muted: #4A5A6E; --plan-line: #13233A; --plan-acc: #B8321F;
   --ter-ground: #EEF1EC; --contour: #9A7B55; --water: #2F6A8C;
   --display: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
-  --body: "Newsreader", Georgia, "Times New Roman", serif;
+  --body: "Newsreader", "Newsreader Fallback", Georgia, "Times New Roman", serif;
   --mono: "Martian Mono", "Martian Mono Fallback", "Martian Mono Fallback Consolas", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);

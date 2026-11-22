@@ -305,6 +305,10 @@ const drawingStyle = SHAPES.map(
       }
     </div>
   </section>
+  {/* The home page's first paint waits for this element (rel=expect in its head). Chromium unblocks on
+      the element's start tag, so it is the sheet's last child: a sheet painted half parsed has a
+      short drawing row, and its summits and command line move when the rest arrives. */}
+  <span id="sheet-end" hidden></span>
 </div>
 
 <style>

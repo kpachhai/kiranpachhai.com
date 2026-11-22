@@ -95,7 +95,11 @@ const SECTIONS: [string, string][] = [
   .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 48px; align-items: end; padding-block: 40px 16px; }
   .name { font-size: clamp(2.6rem, 7vw, 5rem); line-height: 0.92; font-weight: 750; font-stretch: 82%; letter-spacing: 0.005em; }
   .dot { color: var(--accent); }
-  .intro p { margin: 0 0 12px; max-width: 46ch; }
+  /* 26.06em is 46ch of Newsreader. Not ch itself: ch is the "0" of whichever face is drawing, so the
+     measure jumped from 8.8 to 10 px a ch when Newsreader replaced the fallback and the role line
+     rewrapped from three lines to two. The roles held are mono, whose fallback matches its advance. */
+  .intro p { margin: 0 0 12px; max-width: 26.06em; }
+  .intro .roles-held { max-width: 46ch; }
   .role { font-size: 1.1rem; }
   /* The role cycle plays in an overlay on the real line, which keeps its box and its place in the
      accessibility tree; opacity (not visibility) hides it so screen readers still read it. */

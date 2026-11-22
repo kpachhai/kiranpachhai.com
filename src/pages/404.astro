@@ -20,6 +20,7 @@ import { OG_DEFAULT } from '../lib/site'
 <style>
   .missing { padding-block: 64px 0; }
   h1 { font-size: clamp(2.4rem, 8vw, 4.4rem); line-height: 0.95; font-weight: 750; font-stretch: 82%; margin: 10px 0 16px; }
-  p { margin: 0 0 18px; max-width: 52ch; }
+  /* 52ch of Newsreader, in em so the measure holds when the web font replaces its fallback. */
+  p { margin: 0 0 18px; max-width: 29.458em; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 20px; font-family: var(--mono); font-size: 0.8rem; }
 </style>

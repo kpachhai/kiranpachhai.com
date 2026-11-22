@@ -147,11 +147,12 @@ const screens = await Promise.all(
   .crumbs { display: flex; flex-wrap: wrap; gap: 6px 10px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
   .head { border-bottom: 1px solid var(--ink); padding-block: 28px 18px; margin-bottom: 8px; }
   h1 { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 0.98; font-weight: 750; font-stretch: 82%; margin: 10px 0 14px; }
-  .lead { font-size: 1.2rem; margin: 0; max-width: 52ch; }
+  /* 52ch and 60ch of Newsreader, in em so the measures hold when the web font replaces its fallback. */
+  .lead { font-size: 1.2rem; margin: 0; max-width: 29.458em; }
   .body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 40px; }
   .body section { min-width: 0; }
   h2 { font-family: var(--mono); font-weight: 500; font-size: 0.6875rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
-  .body p { margin: 0 0 10px; max-width: 60ch; }
+  .body p { margin: 0 0 10px; max-width: 33.99em; }
   .named { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
   .named li { display: inline-flex; align-items: center; gap: 6px; }
   .letter { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 0.7rem; font-weight: 600; }

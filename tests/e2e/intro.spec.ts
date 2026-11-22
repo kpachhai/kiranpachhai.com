@@ -17,6 +17,27 @@ async function loaded(page: Page, path = '/') {
 // The intro's own animations; the command line's blinking caret is a CSS animation and is left out.
 const scripted = (page: Page) => page.evaluate(() => document.getAnimations().filter((animation) => !(animation instanceof CSSAnimation)).length)
 
+// The intro starts three frames after the island is ready, and under load (WebKit with every worker
+// busy) a frame can take most of a second, so these wait for frames and for the intro's own
+// animation clock rather than for a time. Resolves, in the frame the intro starts, to the latest end
+// of its animations on that clock (ms).
+async function introPlaying(page: Page): Promise<number> {
+  const end = await page.waitForFunction(
+    () => {
+      const sheet = document.getElementById('sheet')
+      if (sheet?.dataset.intro !== 'play') return false
+      const animations = sheet.getAnimations({ subtree: true }).filter((animation) => !(animation instanceof CSSAnimation))
+      return animations.length > 0 && Math.max(...animations.map((animation) => Number(animation.effect!.getComputedTiming().endTime)))
+    },
+    undefined,
+    { polling: 'raf' },
+  )
+  // waitForFunction resolves only on a truthy value, so it is the number.
+  return (await end.jsonValue()) as number
+}
+
+const introOver = (page: Page) => page.waitForFunction(() => document.getElementById('sheet')?.dataset.intro === undefined, undefined, { polling: 'raf' })
+
 // One reading of everything the intro may leave behind on the sheet.
 const sheetState = (page: Page) =>
   page.evaluate(() => {
@@ -52,7 +73,7 @@ test.describe('sheet intro', () => {
     expect(await scripted(page)).toBeGreaterThan(0)
     await expect(page.locator('#intro-skip')).toBeVisible()
     expect(await page.evaluate((key) => sessionStorage.getItem(key), INTRO_KEY)).toBe('1')
-    await expect(page.locator('#sheet')).not.toHaveAttribute('data-intro', 'play', { timeout: 4000 })
+    await introOver(page)
     expectSettled(await sheetState(page), 'after the intro')
 
     await loaded(page)
@@ -110,7 +131,7 @@ test.describe('sheet intro', () => {
       })
       await loaded(page)
       await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
-      await expect(page.locator('#sheet')).not.toHaveAttribute('data-intro', 'play', { timeout: 4000 })
+      await introOver(page)
       const log = await page.evaluate(
         () => (window as unknown as { introLog: { firstFrame: unknown; settledFrame: number; introFrame: number; introAt: number; shift: number } }).introLog,
       )
@@ -168,9 +189,16 @@ test.describe('sheet intro', () => {
   })
 
   test('Skip intro cancels every animation and leaves the settled sheet', { tag: '@smoke' }, async ({ page }) => {
-    const start = await loaded(page)
-    await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
-    await page.waitForFunction((from) => performance.now() - from >= 600, start)
+    await loaded(page)
+    await introPlaying(page)
+    // Held 600 ms into the intro, mid-draw, so a slow frame cannot let it run out before the click.
+    await page.evaluate(() => {
+      for (const animation of document.getElementById('sheet')!.getAnimations({ subtree: true })) {
+        if (animation instanceof CSSAnimation) continue
+        animation.pause()
+        animation.currentTime = 600
+      }
+    })
     await page.locator('#intro-skip').click()
     expectSettled(await sheetState(page), 'after Skip')
     await expect(page.locator('#intro-replay')).toBeFocused()
@@ -186,7 +214,7 @@ test.describe('sheet intro', () => {
     await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
     expect(await scripted(page)).toBeGreaterThan(0)
     await expect(page.locator('#intro-skip')).toBeVisible()
-    await expect(page.locator('#sheet')).not.toHaveAttribute('data-intro', 'play', { timeout: 4000 })
+    await introOver(page)
     expectSettled(await sheetState(page), 'after Replay')
   })
 
@@ -349,9 +377,10 @@ test.describe('sheet intro', () => {
   test('at 390 px the intro plays and settles with no horizontal scroll', { tag: '@smoke' }, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await loaded(page)
-    await expect(page.locator('#sheet')).toHaveAttribute('data-intro', 'play')
+    // It is timed to end inside 4 s of its own clock, and then ends on its own, however slowly the frames come.
+    expect(await introPlaying(page)).toBeLessThan(4000)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
-    await expect(page.locator('#sheet')).not.toHaveAttribute('data-intro', 'play', { timeout: 4000 })
+    await introOver(page)
     expectSettled(await sheetState(page), 'settled at 390')
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
   })

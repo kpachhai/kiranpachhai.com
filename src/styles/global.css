@@ -33,6 +33,19 @@
   src: url('/fonts/newsreader-latin-wght-normal.woff2') format('woff2-variations');
 }
 
+/* Times New Roman (macOS, Windows) and Liberation Serif (Linux) share widths, scaled to Newsreader so
+   body text set before the web font arrives wraps where it will after the swap. Over the home page's
+   text Newsreader runs 1.0555 of their width. The overrides are Newsreader's ascent 0.735 and descent
+   0.265 divided by size-adjust. */
+@font-face {
+  font-family: "Newsreader Fallback";
+  src: local("Times New Roman"), local("TimesNewRomanPSMT"), local("Liberation Serif"), local("LiberationSerif");
+  size-adjust: 105.55%;
+  ascent-override: 69.64%;
+  descent-override: 25.11%;
+  line-gap-override: 0%;
+}
+
 /* The real italic, subset to the characters of the hero thesis, the one italic line on the site.
    optional: if it is not ready for first paint it is skipped for that visit, so it never shifts layout. */
 @font-face {
@@ -107,7 +120,9 @@ a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .sec { padding-block: 56px 8px; scroll-margin-top: 24px; }
 .sec-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; border-bottom: 1px solid var(--ink); padding-bottom: 10px; margin-bottom: 22px; }
 .sec-head h2 { font-size: clamp(1.9rem, 4.6vw, 3rem); line-height: 1; font-weight: 720; font-stretch: 82%; }
-.lede { margin: -6px 0 22px; font-size: 1rem; color: var(--muted); max-width: 70ch; }
+/* Body-text measures are in em, not ch: ch is the "0" of whichever face is drawing, so a ch measure
+   changes width when Newsreader (0.5665 em) replaces its fallback. 39.655em is 70ch of Newsreader. */
+.lede { margin: -6px 0 22px; font-size: 1rem; color: var(--muted); max-width: 39.655em; }
 .mth { display: inline-flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
 .mth li { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 0.65rem; font-weight: 600; }
 .st-chip { font-family: var(--mono); font-size: 0.625rem; letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid currentColor; padding: 1px 6px; color: var(--muted); white-space: nowrap; }

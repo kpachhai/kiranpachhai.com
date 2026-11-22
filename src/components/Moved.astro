@@ -26,5 +26,6 @@ const { path, target, title, message, linkText } = Astro.props
 <style>
   .moved { padding-block: 64px 0; }
   h1 { font-size: clamp(2rem, 6vw, 3.4rem); font-weight: 750; font-stretch: 82%; margin-bottom: 16px; }
-  p { margin: 0 0 12px; max-width: 52ch; }
+  /* 52ch of Newsreader, in em so the measure holds when the web font replaces its fallback. */
+  p { margin: 0 0 12px; max-width: 29.458em; }
 </style>
